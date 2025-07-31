@@ -59,12 +59,16 @@ class SimpleEcosystemWrapper:
                 herbivores_data['x'].append(agent.position.x)
                 herbivores_data['y'].append(agent.position.y)
                 herbivores_data['fitness'].append(getattr(agent.brain, 'fitness_score', 0) if hasattr(agent, 'brain') else 0)
-                herbivores_data['ids'].append(getattr(agent, 'agent_id', id(agent)))
+                # Check both 'id' and 'agent_id' attributes, plus fallback to Python id()
+                agent_identifier = getattr(agent, 'id', getattr(agent, 'agent_id', id(agent)))
+                herbivores_data['ids'].append(agent_identifier)
             else:  # CARNIVORE
                 carnivores_data['x'].append(agent.position.x)
                 carnivores_data['y'].append(agent.position.y)
                 carnivores_data['fitness'].append(getattr(agent.brain, 'fitness_score', 0) if hasattr(agent, 'brain') else 0)
-                carnivores_data['ids'].append(getattr(agent, 'agent_id', id(agent)))
+                # Check both 'id' and 'agent_id' attributes, plus fallback to Python id()
+                agent_identifier = getattr(agent, 'id', getattr(agent, 'agent_id', id(agent)))
+                carnivores_data['ids'].append(agent_identifier)
         
         # Process food sources
         for food in self.env.food_sources:
