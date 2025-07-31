@@ -33,6 +33,10 @@ class NeuralAgent(Agent):
         self.offspring_count = 0
         self.survival_time = 0
         
+        # Food acquisition tracking for fitness
+        self.food_consumed_this_step = False
+        self.last_food_distance = float('inf')
+        
         # Behavioral modifiers
         self.last_action = None
         self.action_cooldown = 0
@@ -120,40 +124,111 @@ class NeuralAgent(Agent):
         return offspring
     
     def update_fitness(self, environment: Environment):
-        """Update neural network fitness based on agent performance"""
+        """Update neural network fitness based on agent performance - FOCUSED ON FOOD ACQUISITION"""
         self.survival_time += 1
         
         # Base fitness from survival
         survival_fitness = self.survival_time * 0.1
         
-        # Energy management fitness
-        energy_fitness = (self.energy / self.max_energy) * 10
+        # Energy management fitness (still important for survival)
+        energy_fitness = (self.energy / self.max_energy) * 8
         
-        # Species-specific bonuses
+        # FOOD-FOCUSED FITNESS: Core survival skill
+        food_acquisition_fitness = self._calculate_food_acquisition_fitness(environment)
+        
+        # Species-specific bonuses focused on food efficiency
         species_bonus = 0
         if self.species_type == SpeciesType.HERBIVORE:
-            # Bonus for finding food efficiently
-            species_bonus = self.lifetime_food_consumed * 2
-            # Penalty for being caught (low energy from threats)
+            # Strong bonus for food consumption efficiency
+            species_bonus = self.lifetime_food_consumed * 5  # Increased from 2
+            # Additional bonus for maintaining good energy through efficient foraging
+            if self.lifetime_food_consumed > 0:
+                food_efficiency = (self.energy / self.max_energy) / (self.survival_time / 100.0)
+                species_bonus += food_efficiency * 15
+            # Penalty for being caught (predation pressure)
             if hasattr(self, 'was_hunted') and self.was_hunted:
                 species_bonus -= 20
         else:  # Carnivore
-            # Bonus for successful hunts
-            species_bonus = self.lifetime_successful_hunts * 15
-            # Bonus for maintaining energy through hunting
-            if self.energy > self.max_energy * 0.7:
-                species_bonus += 5
+            # Strong bonus for successful hunts
+            species_bonus = self.lifetime_successful_hunts * 25  # Increased from 20
+            # Bonus for hunt efficiency (energy gained vs time spent)
+            if self.lifetime_successful_hunts > 0:
+                hunt_efficiency = (self.energy / self.max_energy) / (self.survival_time / 100.0)
+                species_bonus += hunt_efficiency * 20
+            # Base carnivore survival bonus
+            species_bonus += 8
         
-        # Reproduction fitness
-        reproduction_fitness = self.offspring_count * 25
+        # Reproduction fitness (natural selection reward)
+        reproduction_fitness = self.offspring_count * 30  # Increased from 25
         
-        # Combine fitness components
-        total_fitness = survival_fitness + energy_fitness + species_bonus + reproduction_fitness
+        # Combine fitness components (food acquisition is now primary focus)
+        total_fitness = (survival_fitness + energy_fitness + species_bonus + 
+                        reproduction_fitness + food_acquisition_fitness)
         
         # Update neural network fitness (with momentum for stability)
         momentum = 0.9
         self.brain.fitness_score = (momentum * self.brain.fitness_score + 
                                    (1 - momentum) * total_fitness)
+    
+    def _calculate_food_acquisition_fitness(self, environment: Environment):
+        """Calculate fitness reward based on food acquisition abilities"""
+        # Find nearest food source
+        nearest_food_distance = float('inf')
+        nearest_food = None
+        
+        for food in environment.food_sources:
+            if food.is_available:
+                distance = self.position.distance_to(food.position)
+                if distance < nearest_food_distance:
+                    nearest_food_distance = distance
+                    nearest_food = food
+        
+        # Base food acquisition fitness
+        food_fitness = 0
+        
+        # Reward for being close to food sources
+        if nearest_food_distance < float('inf'):
+            # Inverse distance reward - closer to food = higher fitness
+            max_distance = math.sqrt(environment.width**2 + environment.height**2)
+            proximity_ratio = 1.0 - (nearest_food_distance / max_distance)
+            food_fitness += proximity_ratio * 15  # Strong reward for being near food
+            
+            # Extra bonus for being very close to food (within interaction range)
+            if nearest_food_distance <= 5.0:  # Close enough to potentially consume
+                food_fitness += 25  # Big bonus for being in food acquisition range
+                
+            # Bonus for moving towards food (check if getting closer)
+            if hasattr(self, 'last_food_distance'):
+                if nearest_food_distance < self.last_food_distance:
+                    food_fitness += 10  # Reward for improving food approach
+            self.last_food_distance = nearest_food_distance
+        
+        # Major bonus for actual food consumption
+        if hasattr(self, 'food_consumed_this_step') and self.food_consumed_this_step:
+            food_fitness += 50  # Huge reward for successful food acquisition
+            self.food_consumed_this_step = False
+        
+        # For carnivores, consider prey proximity as "food"
+        if self.species_type == SpeciesType.CARNIVORE:
+            nearest_prey_distance = float('inf')
+            for agent in environment.agents:
+                if (agent.species_type == SpeciesType.HERBIVORE and 
+                    agent.is_alive and agent != self):
+                    distance = self.position.distance_to(agent.position)
+                    if distance < nearest_prey_distance:
+                        nearest_prey_distance = distance
+            
+            # Reward carnivores for being near potential prey
+            if nearest_prey_distance < float('inf'):
+                max_distance = math.sqrt(environment.width**2 + environment.height**2)
+                prey_proximity_ratio = 1.0 - (nearest_prey_distance / max_distance)
+                food_fitness += prey_proximity_ratio * 10  # Moderate reward for prey proximity
+                
+                # Extra bonus for being in hunting range
+                if nearest_prey_distance <= 8.0:  # Within hunting range
+                    food_fitness += 20
+        
+        return food_fitness
     
     def consume_food(self, food_energy: int):
         """Track food consumption for fitness - HERBIVORES ONLY"""
@@ -165,12 +240,18 @@ class NeuralAgent(Agent):
         self.energy = min(self.max_energy, self.energy + food_energy)
         self.lifetime_food_consumed += 1
         self.lifetime_energy_gained += food_energy
+        
+        # Mark food consumption for this step's fitness calculation
+        self.food_consumed_this_step = True
     
     def successful_hunt(self, energy_gained: int):
         """Track successful hunts for fitness"""
         self.energy = min(self.max_energy, self.energy + energy_gained)
         self.lifetime_successful_hunts += 1
         self.lifetime_energy_gained += energy_gained
+        
+        # Mark food consumption (hunting) for this step's fitness calculation
+        self.food_consumed_this_step = True
     
     def update(self):
         """Enhanced update with neural network aging"""
@@ -251,8 +332,9 @@ class NeuralEnvironment(Environment):
             
             # Neural decision-making replaces rule-based behavior
             if isinstance(agent, NeuralAgent):
-                # Reset hunting flag for this step
+                # Reset step-based tracking flags
                 agent.was_hunted = False
+                agent.food_consumed_this_step = False
                 
                 # Use neural network for decision making
                 offspring = agent.neural_move(self)

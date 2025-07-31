@@ -169,13 +169,48 @@ class Environment:
         self.agents.append(agent)
     
     def add_food(self, count: int = 1):
-        """Add food sources to the environment"""
-        for _ in range(count):
-            pos = Position(
-                random.uniform(10, self.width - 10),
-                random.uniform(10, self.height - 10)
-            )
-            self.food_sources.append(Food(pos))
+        """Add food sources to the environment with enhanced distribution"""
+        # ENHANCED: Create clustered food distribution away from boundaries
+        if count <= 8:  # For small amounts, use clustered approach
+            self._add_clustered_food(count)
+        else:  # For larger amounts, use mixed approach
+            clusters = count // 4
+            self._add_clustered_food(clusters * 4)
+            # Add remaining scattered
+            remaining = count - (clusters * 4)
+            for _ in range(remaining):
+                pos = Position(
+                    random.uniform(self.width * 0.25, self.width * 0.75),
+                    random.uniform(self.height * 0.25, self.height * 0.75)
+                )
+                food = Food(pos)
+                food.regeneration_time = 120  # Slightly slower regeneration
+                self.food_sources.append(food)
+    
+    def _add_clustered_food(self, count: int):
+        """Add food in clusters away from boundaries"""
+        num_clusters = max(1, count // 4)
+        items_per_cluster = count // num_clusters
+        
+        for cluster in range(num_clusters):
+            # Place cluster center in safe zone (away from boundaries)
+            center_x = random.uniform(self.width * 0.3, self.width * 0.7)
+            center_y = random.uniform(self.height * 0.3, self.height * 0.7)
+            
+            # Create cluster of food around center
+            for _ in range(items_per_cluster):
+                # Cluster radius
+                cluster_radius = 12
+                offset_x = random.uniform(-cluster_radius, cluster_radius)
+                offset_y = random.uniform(-cluster_radius, cluster_radius)
+                
+                # Ensure food stays in safe zone
+                food_x = max(self.width * 0.2, min(self.width * 0.8, center_x + offset_x))
+                food_y = max(self.height * 0.2, min(self.height * 0.8, center_y + offset_y))
+                
+                food = Food(Position(food_x, food_y))
+                food.regeneration_time = 120  # Slower regeneration for balance
+                self.food_sources.append(food)
     
     def get_neural_stats(self) -> dict:
         """Get neural network statistics for agents"""
@@ -266,12 +301,17 @@ class Environment:
     def attempt_hunt(self, predator: Agent, prey: Agent) -> bool:
         """Attempt to hunt prey if close enough"""
         distance = predator.position.distance_to(prey.position)
-        if distance <= 3.0:  # Close enough to hunt
-            # Success depends on predator energy and prey size
-            hunt_success_chance = min(0.8, predator.energy / 100)
+        if distance <= 5.0:  # Increased hunt range
+            # Improved success calculation based on multiple factors
+            energy_factor = min(0.8, predator.energy / 80)  # Lower energy threshold
+            size_factor = 0.9 if prey.energy < predator.energy else 0.6  # Easier to hunt smaller prey
+            health_factor = 0.1 if prey.energy < 20 else 0.0  # Bonus for hunting weak prey
+            
+            hunt_success_chance = min(0.9, energy_factor + size_factor + health_factor)
+            
             if random.random() < hunt_success_chance:
-                # Successful hunt
-                energy_gained = int(prey.energy * 0.7)  # 70% energy transfer efficiency
+                # Successful hunt with better energy transfer
+                energy_gained = int(prey.energy * 0.8)  # 80% energy transfer efficiency
                 predator.energy = min(predator.max_energy, predator.energy + energy_gained)
                 prey.is_alive = False
                 return True

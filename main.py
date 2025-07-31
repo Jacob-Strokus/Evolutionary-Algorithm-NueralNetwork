@@ -37,6 +37,7 @@ sys.path.insert(0, project_root)
 from src.neural.neural_agents import NeuralEnvironment, NeuralAgent
 from src.analysis.neural_inspector import NeuralNetworkInspector
 from src.core.ecosystem import SpeciesType
+from src.evolution.advanced_genetic import AdvancedGeneticAlgorithm, AdvancedEvolutionConfig
 
 class SimpleEcosystemWrapper:
     """Simple wrapper for the environment to work with the web server"""
@@ -46,6 +47,89 @@ class SimpleEcosystemWrapper:
         self.fitness_history_herb = []
         self.fitness_history_carn = []
         self.population_history = []
+
+class EnhancedEcosystemWrapper:
+    """Enhanced wrapper with evolution capabilities for the web server"""
+    def __init__(self, evolution_system):
+        self.evolution_system = evolution_system
+        self.env = evolution_system.environment
+        self.step_count = 0
+        self.generation_step_count = 0
+        self.steps_per_generation = 300
+        self.fitness_history_herb = []
+        self.fitness_history_carn = []
+        self.population_history = []
+        self.generation_history = []
+        
+    def step(self):
+        """Run one simulation step with evolution"""
+        self.env.step()
+        self.step_count += 1
+        self.generation_step_count += 1
+        
+        # Check if it's time for evolution
+        if self.generation_step_count >= self.steps_per_generation:
+            print(f"🔄 Generation {self.evolution_system.generation + 1} complete, evolving...")
+            self.evolution_system.evolve_to_next_generation()
+            self.generation_step_count = 0
+            
+    def update(self):
+        """Alias for step() for compatibility"""
+        self.step()
+        
+    def get_agent_data(self):
+        """Get agent data in the format expected by the web server"""
+        herbivores_data = {'x': [], 'y': [], 'fitness': [], 'ids': []}
+        carnivores_data = {'x': [], 'y': [], 'fitness': [], 'ids': []}
+        food_data = {'x': [], 'y': []}
+        
+        # Process agents
+        for agent in self.env.agents:
+            if agent.species_type == SpeciesType.HERBIVORE:
+                herbivores_data['x'].append(agent.position.x)
+                herbivores_data['y'].append(agent.position.y)
+                herbivores_data['fitness'].append(getattr(agent.brain, 'fitness_score', 0) if hasattr(agent, 'brain') else 0)
+                # Check both 'id' and 'agent_id' attributes, plus fallback to Python id()
+                agent_identifier = getattr(agent, 'id', getattr(agent, 'agent_id', id(agent)))
+                herbivores_data['ids'].append(agent_identifier)
+            else:  # CARNIVORE
+                carnivores_data['x'].append(agent.position.x)
+                carnivores_data['y'].append(agent.position.y)
+                carnivores_data['fitness'].append(getattr(agent.brain, 'fitness_score', 0) if hasattr(agent, 'brain') else 0)
+                # Check both 'id' and 'agent_id' attributes, plus fallback to Python id()
+                agent_identifier = getattr(agent, 'id', getattr(agent, 'agent_id', id(agent)))
+                carnivores_data['ids'].append(agent_identifier)
+        
+        # Process food sources
+        for food in self.env.food_sources:
+            if food.is_available:  # Only show available food
+                food_data['x'].append(food.position.x)
+                food_data['y'].append(food.position.y)
+        
+        return {
+            'herbivores': herbivores_data,
+            'carnivores': carnivores_data,
+            'food': food_data
+        }
+    
+    def update_step(self):
+        """Update step count and run environment evolution step"""
+        self.step()
+        
+    def get_stats(self):
+        """Get enhanced statistics including evolution data"""
+        stats = self.env.get_neural_stats() if hasattr(self.env, 'get_neural_stats') else {}
+        
+        # Add evolution-specific stats
+        stats.update({
+            'generation': self.evolution_system.generation,
+            'generation_step': self.generation_step_count,
+            'steps_per_generation': self.steps_per_generation,
+            'total_steps': self.evolution_system.total_steps,
+            'evolution_progress': (self.generation_step_count / self.steps_per_generation) * 100
+        })
+        
+        return stats
     
     def get_agent_data(self):
         """Get agent data in the format expected by the web server"""
@@ -146,36 +230,80 @@ def run_standard_simulation(steps=500):
             print(f"🏆 Top Carnivore: Gen {getattr(top_carnivore, 'generation', '?')}, Energy: {top_carnivore.energy:.1f}")
 
 def run_web_simulation(steps=1000):
-    """Run simulation with web-based visualization."""
-    print("🌐 Starting Neural Ecosystem Web Interface")
-    print("=" * 50)
+    """Run simulation with web-based visualization and enhanced evolution."""
+    print("🌐 Starting Enhanced Neural Ecosystem Web Interface")
+    print("=" * 55)
     
     # Import the new clean web server
     from src.visualization.web_server import EcosystemWebServer
     
-    # Create environment
+    # Create enhanced evolution system
+    print("🧬 Initializing Enhanced Evolution System...")
+    
+    # Setup genetic algorithm with optimized parameters
+    genetic_config = AdvancedEvolutionConfig()
+    genetic_config.elite_percentage = 0.20      # Keep top 20%
+    genetic_config.mutation_rate = 0.15         # Moderate mutations
+    genetic_config.mutation_strength = 0.25     # Balanced strength
+    genetic_config.crossover_rate = 0.8         # High crossover
+    genetic_config.tournament_size = 4          # Strong selection pressure
+    genetic_config.diversity_bonus = 0.15       # Encourage diversity
+    genetic_config.generation_length = 300      # Steps per generation
+    
+    # Create evolution system components
     env = NeuralEnvironment(width=100, height=100, use_neural_agents=True)
+    genetic_algorithm = AdvancedGeneticAlgorithm(genetic_config)
+    
+    # Create a simplified evolution system for web interface
+    class WebEvolutionSystem:
+        def __init__(self, environment, genetic_algorithm):
+            self.environment = environment
+            self.genetic_algorithm = genetic_algorithm
+            self.generation = 0
+            self.total_steps = 0
+            
+        def evolve_to_next_generation(self):
+            """Evolve the population to the next generation"""
+            print(f"🔄 Evolving to generation {self.generation + 1}...")
+            
+            current_agents = [a for a in self.environment.agents if a.is_alive]
+            if len(current_agents) < 5:
+                print("⚠️ Population too small for evolution")
+                return
+                
+            # Perform evolution
+            next_generation = self.genetic_algorithm.create_next_generation(current_agents)
+            
+            # Update environment
+            self.environment.agents = next_generation
+            self.generation += 1
+            
+            print(f"   Generation {self.generation}: {len(next_generation)} agents")
+    
+    evolution_system = WebEvolutionSystem(env, genetic_algorithm)
     
     print(f"🦌 Initial Herbivores: {len([a for a in env.agents if a.species_type == SpeciesType.HERBIVORE])}")
     print(f"🐺 Initial Carnivores: {len([a for a in env.agents if a.species_type == SpeciesType.CARNIVORE])}")
     print(f"🌱 Food Sources: {len(env.food_sources)}")
     
-    # Create simple wrapper for web server
-    canvas = SimpleEcosystemWrapper(env)
+    # Create enhanced wrapper for web server
+    canvas = EnhancedEcosystemWrapper(evolution_system)
     
     # Create web server
     web_server = EcosystemWebServer(canvas)
     
-    print("\n🚀 Starting web server...")
+    print("\n🚀 Starting enhanced web server...")
     print("📱 Open your browser to: http://localhost:5000")
-    print("\n🔍 Features:")
+    print("\n🔍 Enhanced Features:")
     print("   • 🖥️  Real-time simulation display")
+    print("   • 🧬 Automatic generational evolution")
     print("   • 🎮 Interactive start/stop controls")
     print("   • ⚡ Adjustable simulation speed")
-    print("   • � Live population statistics")
+    print("   • 📊 Live population & evolution statistics")
     print("   • 🔄 WebSocket real-time updates")
+    print("   • 🏆 Elite preservation & tournament selection")
     print("\n⚡ Press Ctrl+C to stop the simulation")
-    print("💡 TIP: Click 'Start Simulation' button to begin!")
+    print("💡 TIP: Click 'Start Simulation' to see evolution in action!")
     
     try:
         # Start the web server

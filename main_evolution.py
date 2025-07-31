@@ -8,8 +8,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from src.neural.neural_agents import NeuralEnvironment
 from src.evolution.advanced_genetic import AdvancedGeneticAlgorithm, AdvancedEvolutionConfig
-from src.visualization.neural_visualizer import NeuralVisualizer
-from src.visualization.monitor import PerformanceMonitor
+from src.visualization.neural_visualizer import visualize_neural_ecosystem
 import time
 
 class EnhancedEvolutionSystem:
@@ -32,10 +31,6 @@ class EnhancedEvolutionSystem:
         genetic_config.generation_length = 400      # Longer evaluation
         
         self.genetic_algorithm = AdvancedGeneticAlgorithm(genetic_config)
-        
-        # Visualization and monitoring
-        self.visualizer = NeuralVisualizer()
-        self.monitor = PerformanceMonitor()
         
         # Evolution tracking
         self.generation = 0
@@ -135,7 +130,7 @@ class EnhancedEvolutionSystem:
             
             # Show visualization periodically
             if show_visualization and step % 100 == 0:
-                self.visualizer.update_neural_display(self.environment)
+                visualize_neural_ecosystem(self.environment)
         
         # Final statistics
         final_stats = self.environment.get_neural_stats()
@@ -228,7 +223,7 @@ def main():
     # Run evolution
     results = system.run_evolution_cycle(
         steps_per_generation=300,
-        max_generations=25,
+        max_generations=10,
         show_visualization=False,  # Set to True to see neural network visualization
         verbose=True
     )

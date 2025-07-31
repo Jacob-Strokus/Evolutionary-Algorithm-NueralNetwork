@@ -222,19 +222,25 @@ class SensorSystem:
         # Reproduction readiness
         inputs[7] = 1.0 if agent.can_reproduce() else 0.0
         
-        # Distance to nearest X boundary (0 = at boundary, 1 = far from boundary)
+        # Distance to nearest X boundary (0 = at boundary, 1 = center)
         distance_to_left = agent.position.x
         distance_to_right = environment.width - agent.position.x
         min_x_distance = min(distance_to_left, distance_to_right)
         max_x_distance = environment.width / 2  # Maximum possible distance from center
-        inputs[8] = min(1.0, min_x_distance / max_x_distance)
         
-        # Distance to nearest Y boundary (0 = at boundary, 1 = far from boundary)
+        # FIXED: Invert boundary signal - higher values = safer (away from boundary)
+        x_center_ratio = min_x_distance / max_x_distance
+        inputs[8] = min(1.0, x_center_ratio)
+        
+        # Distance to nearest Y boundary (0 = at boundary, 1 = center)  
         distance_to_top = agent.position.y
         distance_to_bottom = environment.height - agent.position.y
         min_y_distance = min(distance_to_top, distance_to_bottom)
         max_y_distance = environment.height / 2  # Maximum possible distance from center
-        inputs[9] = min(1.0, min_y_distance / max_y_distance)
+        
+        # FIXED: Invert boundary signal - higher values = safer (away from boundary)
+        y_center_ratio = min_y_distance / max_y_distance
+        inputs[9] = min(1.0, y_center_ratio)
         
         return inputs
     
