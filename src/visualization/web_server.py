@@ -70,6 +70,27 @@ class EcosystemWebServer:
             self.simulation_speed = max(10, min(1000, data.get('speed', 100)))
             print(f'⚡ Speed set to {self.simulation_speed}ms')
             emit('status', {'message': f'Speed set to {self.simulation_speed}ms'})
+        
+        @self.socketio.on('inspect_agent')
+        def handle_agent_inspection(data):
+            agent_id = data.get('agent_id')
+            print(f'🔍 Inspecting agent {agent_id}')
+            agent_data = self.get_agent_details(agent_id)
+            if agent_data:
+                emit('agent_details', agent_data)
+            else:
+                emit('status', {'message': f'Agent {agent_id} not found'})
+        
+        @self.socketio.on('update_agent')
+        def handle_agent_update(data):
+            """Handle real-time agent updates for open inspector"""
+            agent_id = data.get('agent_id')
+            if agent_id:
+                agent_data = self.get_agent_details(agent_id)
+                if agent_data:
+                    emit('agent_update', agent_data)
+                else:
+                    emit('agent_not_found', {'agent_id': agent_id})
     
     def get_ecosystem_data(self):
         """Get current ecosystem state"""
@@ -91,7 +112,8 @@ class EcosystemWebServer:
                 for agent in env.agents:
                     x, y = agent.position.x, agent.position.y
                     fitness = getattr(agent.brain, 'fitness_score', 0) if hasattr(agent, 'brain') else 0
-                    agent_id = getattr(agent, 'agent_id', id(agent))
+                    # Check both 'id' and 'agent_id' attributes, plus fallback to Python id()
+                    agent_identifier = getattr(agent, 'id', getattr(agent, 'agent_id', id(agent)))
                     
                     if hasattr(agent, 'species_type'):
                         from src.core.ecosystem import SpeciesType
@@ -99,12 +121,12 @@ class EcosystemWebServer:
                             agent_data['herbivores']['x'].append(x)
                             agent_data['herbivores']['y'].append(y)
                             agent_data['herbivores']['fitness'].append(fitness)
-                            agent_data['herbivores']['ids'].append(agent_id)
+                            agent_data['herbivores']['ids'].append(agent_identifier)
                         else:
                             agent_data['carnivores']['x'].append(x)
                             agent_data['carnivores']['y'].append(y)
                             agent_data['carnivores']['fitness'].append(fitness)
-                            agent_data['carnivores']['ids'].append(agent_id)
+                            agent_data['carnivores']['ids'].append(agent_identifier)
                 
                 # Process food
                 for food in env.food_sources:
@@ -121,6 +143,108 @@ class EcosystemWebServer:
                 'food': len(agent_data['food']['x'])
             }
         }
+    
+    def get_agent_details(self, agent_id):
+        """Get detailed information about a specific agent"""
+        if not hasattr(self.canvas, 'env'):
+            return None
+        
+        # Find the agent by ID
+        target_agent = None
+        for agent in self.canvas.env.agents:
+            # Check both 'id' and 'agent_id' attributes, plus fallback to Python id()
+            agent_identifier = getattr(agent, 'id', getattr(agent, 'agent_id', id(agent)))
+            if agent_identifier == agent_id:
+                target_agent = agent
+                break
+        
+        if not target_agent:
+            return None
+        
+        # Extract basic agent information
+        from src.core.ecosystem import SpeciesType
+        agent_identifier = getattr(target_agent, 'id', getattr(target_agent, 'agent_id', id(target_agent)))
+        agent_details = {
+            'id': agent_identifier,
+            'species': 'herbivore' if target_agent.species_type == SpeciesType.HERBIVORE else 'carnivore',
+            'position': {'x': target_agent.position.x, 'y': target_agent.position.y},
+            'energy': target_agent.energy,
+            'age': getattr(target_agent, 'age', 0),
+            'generation': getattr(target_agent, 'generation', 0),
+            'fitness': getattr(target_agent.brain, 'fitness_score', 0) if hasattr(target_agent, 'brain') else 0
+        }
+        
+        # Extract neural network information if available
+        if hasattr(target_agent, 'brain') and target_agent.brain is not None:
+            nn = target_agent.brain  # The brain IS the neural network
+            
+            # Get current sensory inputs
+            if hasattr(target_agent.brain, 'sensor_system'):
+                try:
+                    sensory_inputs = target_agent.brain.sensor_system.get_sensory_inputs(
+                        target_agent, self.canvas.env
+                    )
+                except Exception as e:
+                    print(f"Error getting sensory inputs: {e}")
+                    sensory_inputs = [0] * 10  # Default fallback for 10-input network
+            else:
+                # Use the SensorSystem directly
+                try:
+                    from src.neural.neural_network import SensorSystem
+                    sensory_inputs = SensorSystem.get_sensory_inputs(target_agent, self.canvas.env)
+                except Exception as e:
+                    print(f"Error getting sensory inputs: {e}")
+                    sensory_inputs = [0] * 10  # Default fallback for 10-input network
+            
+            # Get network weights and structure
+            try:
+                # Get current network output
+                import numpy as np
+                current_output = nn.forward(np.array(sensory_inputs))
+                
+                # Calculate hidden layer activations for visualization
+                inputs_array = np.array(sensory_inputs)
+                hidden_raw = np.dot(inputs_array, nn.weights_input_hidden) + nn.bias_hidden
+                hidden_activations = nn.tanh(hidden_raw)  # Apply activation function
+                
+                agent_details['neural_network'] = {
+                    'input_size': getattr(nn.config, 'input_size', 8) if hasattr(nn, 'config') else 8,
+                    'hidden_size': getattr(nn.config, 'hidden_size', 12) if hasattr(nn, 'config') else 12,
+                    'output_size': getattr(nn.config, 'output_size', 4) if hasattr(nn, 'config') else 4,
+                    'current_inputs': sensory_inputs,
+                    'hidden_activations': hidden_activations.tolist() if hasattr(hidden_activations, 'tolist') else list(hidden_activations),
+                    'weights_input_hidden': nn.weights_input_hidden.tolist() if hasattr(nn, 'weights_input_hidden') else [],
+                    'weights_hidden_output': nn.weights_hidden_output.tolist() if hasattr(nn, 'weights_hidden_output') else [],
+                    'bias_hidden': nn.bias_hidden.tolist() if hasattr(nn, 'bias_hidden') else [],
+                    'bias_output': nn.bias_output.tolist() if hasattr(nn, 'bias_output') else [],
+                    'input_labels': [
+                        'Energy Level',
+                        'Age Factor',
+                        'Food Distance', 
+                        'Food Angle',
+                        'Threat/Prey Distance',
+                        'Threat/Prey Angle',
+                        'Population Density',
+                        'Can Reproduce',
+                        'X Boundary Distance',
+                        'Y Boundary Distance'
+                    ],
+                    'output_labels': [
+                        'Move X',
+                        'Move Y',
+                        'Reproduce',
+                        'Intensity'
+                    ],
+                    'current_outputs': current_output.tolist() if hasattr(current_output, 'tolist') else list(current_output)
+                }
+            except Exception as e:
+                print(f"Error processing neural network: {e}")
+                agent_details['neural_network'] = None
+        else:
+            print(f"Agent {agent_identifier} has no brain attribute")
+            agent_details['neural_network'] = None
+        
+        return agent_details
     
     def start_simulation_loop(self):
         """Start the simulation loop in a separate thread"""
@@ -172,6 +296,7 @@ class EcosystemWebServer:
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Neural Ecosystem Simulation</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.0.0/d3.min.js"></script>
     <style>
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -320,6 +445,127 @@ class EcosystemWebServer:
             font-size: 12px;
             margin-top: 20px;
         }
+        
+        /* Agent Inspection Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.8);
+        }
+        
+        .modal-content {
+            background-color: white;
+            margin: 2% auto;
+            padding: 20px;
+            border-radius: 15px;
+            width: 90%;
+            max-width: 1000px;
+            max-height: 90vh;
+            overflow-y: auto;
+            color: #333;
+        }
+        
+        .close {
+            color: #aaa;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        
+        .close:hover {
+            color: #000;
+        }
+        
+        .agent-info {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        
+        .info-card {
+            background: #f9f9f9;
+            padding: 15px;
+            border-radius: 10px;
+            border-left: 4px solid #667eea;
+        }
+        
+        .neural-network-container {
+            margin-top: 20px;
+        }
+        
+        .neural-inputs, .neural-outputs {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 10px;
+            margin: 15px 0;
+        }
+        
+        .input-value, .output-value {
+            background: #e8f4f8;
+            padding: 8px;
+            border-radius: 5px;
+            text-align: center;
+            font-size: 12px;
+            transition: all 0.3s ease;
+        }
+        
+        .input-value.active {
+            background: #4CAF50;
+            color: white;
+            transform: scale(1.05);
+            box-shadow: 0 2px 8px rgba(76, 175, 80, 0.3);
+        }
+        
+        .output-value.active {
+            background: #f44336;
+            color: white;
+            transform: scale(1.05);
+            box-shadow: 0 2px 8px rgba(244, 67, 54, 0.3);
+        }
+        
+        .agent-info span {
+            transition: all 0.2s ease;
+        }
+        
+        .agent-info span.updated {
+            background-color: #4CAF50;
+            color: white;
+            padding: 2px 4px;
+            border-radius: 3px;
+        }
+        
+        #neural-network-svg {
+            width: 100%;
+            height: 400px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            background: #fafafa;
+        }
+        
+        .neural-node-active {
+            animation: neuralPulse 1s ease-in-out infinite alternate;
+        }
+        
+        @keyframes neuralPulse {
+            from { transform: scale(1); }
+            to { transform: scale(1.1); }
+        }
+        
+        .connection-active {
+            animation: connectionFlow 2s linear infinite;
+        }
+        
+        @keyframes connectionFlow {
+            0% { stroke-dasharray: 0 10; }
+            100% { stroke-dasharray: 10 0; }
+        }
     </style>
 </head>
 <body>
@@ -372,10 +618,49 @@ class EcosystemWebServer:
         </div>
     </div>
 
+    <!-- Agent Inspection Modal -->
+    <div id="agentModal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h2>🧠 Agent Inspector</h2>
+            
+            <div class="agent-info">
+                <div class="info-card">
+                    <h3>Basic Information</h3>
+                    <p><strong>ID:</strong> <span id="agent-id">-</span></p>
+                    <p><strong>Species:</strong> <span id="agent-species">-</span></p>
+                    <p><strong>Energy:</strong> <span id="agent-energy">-</span></p>
+                    <p><strong>Age:</strong> <span id="agent-age">-</span> steps</p>
+                    <p><strong>Generation:</strong> <span id="agent-generation">-</span></p>
+                    <p><strong>Fitness:</strong> <span id="agent-fitness">-</span></p>
+                </div>
+                
+                <div class="info-card">
+                    <h3>Position & Status</h3>
+                    <p><strong>X:</strong> <span id="agent-x">-</span></p>
+                    <p><strong>Y:</strong> <span id="agent-y">-</span></p>
+                    <p><strong>Network Size:</strong> <span id="network-size">-</span></p>
+                </div>
+            </div>
+            
+            <div class="neural-network-container">
+                <h3>🧠 Neural Network Visualization</h3>
+                <svg id="neural-network-svg"></svg>
+                
+                <h4>Current Sensory Inputs</h4>
+                <div class="neural-inputs" id="neural-inputs"></div>
+                
+                <h4>Current Neural Outputs</h4>
+                <div class="neural-outputs" id="neural-outputs"></div>
+            </div>
+        </div>
+    </div>
+
     <script>
         // WebSocket connection
         const socket = io();
         let isConnected = false;
+        let currentAgentData = null;
         
         // UI elements
         const canvas = document.getElementById('ecosystem-canvas');
@@ -386,6 +671,8 @@ class EcosystemWebServer:
         const speedValue = document.getElementById('speedValue');
         const connectionStatus = document.getElementById('connection-status');
         const log = document.getElementById('log');
+        const modal = document.getElementById('agentModal');
+        const closeModal = document.getElementsByClassName('close')[0];
         
         // Socket events
         socket.on('connect', function() {
@@ -403,6 +690,11 @@ class EcosystemWebServer:
         socket.on('ecosystem_update', function(data) {
             drawEcosystem(data.ecosystem);
             updateStats(data.stats, data.step);
+            
+            // Update agent inspector if open
+            if (modal.style.display === 'block' && currentAgentData) {
+                socket.emit('update_agent', { agent_id: currentAgentData.id });
+            }
         });
         
         socket.on('simulation_started', function(data) {
@@ -419,6 +711,19 @@ class EcosystemWebServer:
         
         socket.on('status', function(data) {
             addLog('ℹ️ ' + data.message);
+        });
+        
+        socket.on('agent_details', function(data) {
+            showAgentModal(data);
+        });
+        
+        socket.on('agent_update', function(data) {
+            updateAgentModal(data);
+        });
+        
+        socket.on('agent_not_found', function(data) {
+            addLog('⚠️ Agent ' + data.agent_id + ' no longer exists');
+            modal.style.display = 'none';
         });
         
         // Button events
@@ -446,6 +751,38 @@ class EcosystemWebServer:
             }
         });
         
+        // Canvas click handler for agent inspection
+        canvas.addEventListener('click', function(event) {
+            if (!isConnected) return;
+            
+            const rect = canvas.getBoundingClientRect();
+            const clickX = event.clientX - rect.left;
+            const clickY = event.clientY - rect.top;
+            
+            // Convert to ecosystem coordinates
+            const scaleX = 100 / canvas.width;
+            const scaleY = 100 / canvas.height;
+            const ecoX = clickX * scaleX;
+            const ecoY = clickY * scaleY;
+            
+            // Find clicked agent
+            const clickedAgent = findAgentAtPosition(ecoX, ecoY);
+            if (clickedAgent) {
+                socket.emit('inspect_agent', { agent_id: clickedAgent.id });
+            }
+        });
+        
+        // Modal close handlers
+        closeModal.onclick = function() {
+            modal.style.display = 'none';
+        }
+        
+        window.onclick = function(event) {
+            if (event.target == modal) {
+                modal.style.display = 'none';
+            }
+        }
+        
         // Helper functions
         function updateConnectionStatus(connected) {
             if (connected) {
@@ -471,6 +808,9 @@ class EcosystemWebServer:
         }
         
         function drawEcosystem(ecosystem) {
+            // Store ecosystem data for agent finding
+            window.currentEcosystem = ecosystem;
+            
             // Clear canvas
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             
@@ -508,6 +848,355 @@ class EcosystemWebServer:
                 ctx.closePath();
                 ctx.fill();
             }
+        }
+        
+        function findAgentAtPosition(ecoX, ecoY) {
+            if (!window.currentEcosystem) return null;
+            
+            const tolerance = 2; // Click tolerance in ecosystem units
+            const ecosystem = window.currentEcosystem;
+            
+            // Check herbivores
+            for (let i = 0; i < ecosystem.herbivores.x.length; i++) {
+                const dx = ecosystem.herbivores.x[i] - ecoX;
+                const dy = ecosystem.herbivores.y[i] - ecoY;
+                if (Math.sqrt(dx * dx + dy * dy) < tolerance) {
+                    return {
+                        id: ecosystem.herbivores.ids[i],
+                        species: 'herbivore'
+                    };
+                }
+            }
+            
+            // Check carnivores
+            for (let i = 0; i < ecosystem.carnivores.x.length; i++) {
+                const dx = ecosystem.carnivores.x[i] - ecoX;
+                const dy = ecosystem.carnivores.y[i] - ecoY;
+                if (Math.sqrt(dx * dx + dy * dy) < tolerance) {
+                    return {
+                        id: ecosystem.carnivores.ids[i],
+                        species: 'carnivore'
+                    };
+                }
+            }
+            
+            return null;
+        }
+        
+        function showAgentModal(agentData) {
+            currentAgentData = agentData;
+            updateAgentModalContent(agentData);
+            modal.style.display = 'block';
+        }
+        
+        function updateAgentModal(agentData) {
+            currentAgentData = agentData;
+            updateAgentModalContent(agentData);
+        }
+        
+        function updateAgentModalContent(agentData) {
+            // Update basic info with smooth transitions and highlight changes
+            updateFieldWithHighlight('agent-id', agentData.id);
+            updateFieldWithHighlight('agent-species', agentData.species);
+            updateFieldWithHighlight('agent-energy', agentData.energy.toFixed(1));
+            updateFieldWithHighlight('agent-age', agentData.age);
+            updateFieldWithHighlight('agent-generation', agentData.generation);
+            updateFieldWithHighlight('agent-fitness', agentData.fitness.toFixed(1));
+            updateFieldWithHighlight('agent-x', agentData.position.x.toFixed(1));
+            updateFieldWithHighlight('agent-y', agentData.position.y.toFixed(1));
+            
+            if (agentData.neural_network && agentData.neural_network !== null) {
+                const nn = agentData.neural_network;
+                updateFieldWithHighlight('network-size', `${nn.input_size}→${nn.hidden_size}→${nn.output_size}`);
+                
+                // Update neural inputs and outputs with real-time data
+                updateNeuralInputs(nn);
+                updateNeuralOutputs(nn);
+                drawNeuralNetwork(nn);
+                
+                // Show neural network sections
+                document.querySelector('.neural-network-container').style.display = 'block';
+            } else {
+                document.getElementById('network-size').textContent = 'No neural network data';
+                document.querySelector('.neural-network-container').style.display = 'none';
+                addLog('⚠️ Agent has no neural network data available');
+            }
+        }
+        
+        function updateFieldWithHighlight(elementId, newValue) {
+            const element = document.getElementById(elementId);
+            const oldValue = element.textContent;
+            
+            if (oldValue !== newValue.toString()) {
+                element.textContent = newValue;
+                element.classList.add('updated');
+                setTimeout(() => {
+                    element.classList.remove('updated');
+                }, 500);
+            }
+        }
+        
+        function updateNeuralInputs(nn) {
+            const container = document.getElementById('neural-inputs');
+            container.innerHTML = '';
+            
+            if (!nn.current_inputs || !nn.input_labels) {
+                container.innerHTML = '<div>No neural input data available</div>';
+                return;
+            }
+            
+            for (let i = 0; i < Math.min(nn.input_labels.length, nn.current_inputs.length); i++) {
+                const div = document.createElement('div');
+                div.className = 'input-value';
+                const value = nn.current_inputs[i] || 0;
+                if (Math.abs(value) > 0.3) {
+                    div.className += ' active';
+                }
+                div.innerHTML = `<strong>${nn.input_labels[i]}</strong><br>${value.toFixed(3)}`;
+                container.appendChild(div);
+            }
+        }
+        
+        function updateNeuralOutputs(nn) {
+            const container = document.getElementById('neural-outputs');
+            container.innerHTML = '';
+            
+            if (!nn.current_outputs || !nn.output_labels) {
+                container.innerHTML = '<div>No neural output data available</div>';
+                return;
+            }
+            
+            // Find the strongest output for decision highlighting
+            let maxValue = -Infinity;
+            let maxIndex = -1;
+            for (let i = 0; i < nn.current_outputs.length; i++) {
+                if (Math.abs(nn.current_outputs[i]) > Math.abs(maxValue)) {
+                    maxValue = nn.current_outputs[i];
+                    maxIndex = i;
+                }
+            }
+            
+            for (let i = 0; i < Math.min(nn.output_labels.length, nn.current_outputs.length); i++) {
+                const div = document.createElement('div');
+                div.className = 'output-value';
+                const value = nn.current_outputs[i] || 0;
+                
+                // Highlight active outputs and strongest decision
+                if (Math.abs(value) > 0.3) {
+                    div.className += ' active';
+                }
+                if (i === maxIndex && Math.abs(maxValue) > 0.1) {
+                    div.className += ' strongest-decision';
+                    div.style.border = '2px solid #FF9800';
+                    div.style.fontWeight = 'bold';
+                }
+                
+                div.innerHTML = `<strong>${nn.output_labels[i]}</strong><br>${value.toFixed(3)}`;
+                container.appendChild(div);
+            }
+        }
+        
+        function drawNeuralNetwork(nn) {
+            const svg = d3.select('#neural-network-svg');
+            svg.selectAll('*').remove(); // Clear previous drawing
+            
+            const width = 800;
+            const height = 400;
+            svg.attr('width', width).attr('height', height);
+            
+            // Check if we have the necessary data
+            if (!nn.weights_input_hidden || !nn.weights_hidden_output || 
+                nn.weights_input_hidden.length === 0 || nn.weights_hidden_output.length === 0) {
+                svg.append('text')
+                    .attr('x', width / 2)
+                    .attr('y', height / 2)
+                    .attr('text-anchor', 'middle')
+                    .attr('font-size', '16px')
+                    .attr('fill', '#666')
+                    .text('Neural network weights not available');
+                return;
+            }
+            
+            // Layer positions
+            const inputX = 50;
+            const hiddenX = width / 2;
+            const outputX = width - 50;
+            
+            // Node positions
+            const inputNodes = [];
+            const hiddenNodes = [];
+            const outputNodes = [];
+            
+            // Calculate input node positions
+            for (let i = 0; i < nn.input_size; i++) {
+                inputNodes.push({
+                    x: inputX,
+                    y: (height / (nn.input_size + 1)) * (i + 1),
+                    value: nn.current_inputs[i] || 0,
+                    label: nn.input_labels[i] || `Input ${i}`
+                });
+            }
+            
+            // Calculate hidden node positions
+            for (let i = 0; i < nn.hidden_size; i++) {
+                hiddenNodes.push({
+                    x: hiddenX,
+                    y: (height / (nn.hidden_size + 1)) * (i + 1),
+                    value: nn.hidden_activations ? nn.hidden_activations[i] : 0 // Real hidden activations
+                });
+            }
+            
+            // Calculate output node positions
+            for (let i = 0; i < nn.output_size; i++) {
+                outputNodes.push({
+                    x: outputX,
+                    y: (height / (nn.output_size + 1)) * (i + 1),
+                    value: nn.current_outputs[i] || 0,
+                    label: nn.output_labels[i] || `Output ${i}`
+                });
+            }
+            
+            // Draw connections (input to hidden) with activation-based opacity
+            for (let i = 0; i < inputNodes.length && i < nn.weights_input_hidden.length; i++) {
+                for (let j = 0; j < hiddenNodes.length && j < nn.weights_input_hidden[i].length; j++) {
+                    const weight = nn.weights_input_hidden[i][j];
+                    const inputActivation = Math.abs(inputNodes[i].value);
+                    const connectionStrength = Math.abs(weight) * inputActivation;
+                    
+                    svg.append('line')
+                        .attr('x1', inputNodes[i].x)
+                        .attr('y1', inputNodes[i].y)
+                        .attr('x2', hiddenNodes[j].x)
+                        .attr('y2', hiddenNodes[j].y)
+                        .attr('stroke', weight > 0 ? '#2196F3' : '#FF9800')
+                        .attr('stroke-width', Math.min(Math.abs(weight) * 3, 5))
+                        .attr('opacity', Math.max(0.2, Math.min(connectionStrength * 2, 0.9)));
+                }
+            }
+            
+            // Draw connections (hidden to output) with activation-based opacity
+            for (let i = 0; i < hiddenNodes.length && i < nn.weights_hidden_output.length; i++) {
+                for (let j = 0; j < outputNodes.length && j < nn.weights_hidden_output[i].length; j++) {
+                    const weight = nn.weights_hidden_output[i][j];
+                    const hiddenActivation = Math.abs(hiddenNodes[i].value);
+                    const connectionStrength = Math.abs(weight) * hiddenActivation;
+                    
+                    svg.append('line')
+                        .attr('x1', hiddenNodes[i].x)
+                        .attr('y1', hiddenNodes[i].y)
+                        .attr('x2', outputNodes[j].x)
+                        .attr('y2', outputNodes[j].y)
+                        .attr('stroke', weight > 0 ? '#2196F3' : '#FF9800')
+                        .attr('stroke-width', Math.min(Math.abs(weight) * 3, 5))
+                        .attr('opacity', Math.max(0.2, Math.min(connectionStrength * 2, 0.9)));
+                }
+            }
+            
+            // Draw input nodes
+            svg.selectAll('.input-node')
+                .data(inputNodes)
+                .enter()
+                .append('circle')
+                .attr('class', 'input-node')
+                .attr('cx', d => d.x)
+                .attr('cy', d => d.y)
+                .attr('r', 15)
+                .attr('fill', d => {
+                    const intensity = Math.min(Math.abs(d.value), 1);
+                    return d.value > 0 ? `rgba(156, 39, 176, ${0.3 + intensity * 0.7})` : 
+                           d.value < 0 ? `rgba(0, 150, 136, ${0.3 + intensity * 0.7})` : '#e0e0e0';
+                })
+                .attr('stroke', '#333')
+                .attr('stroke-width', 2);
+            
+            // Draw hidden nodes with activation-based coloring
+            svg.selectAll('.hidden-node')
+                .data(hiddenNodes)
+                .enter()
+                .append('circle')
+                .attr('class', 'hidden-node')
+                .attr('cx', d => d.x)
+                .attr('cy', d => d.y)
+                .attr('r', 12)
+                .attr('fill', d => {
+                    const intensity = Math.min(Math.abs(d.value), 1);
+                    if (Math.abs(d.value) > 0.1) {
+                        return d.value > 0 ? `rgba(156, 39, 176, ${0.3 + intensity * 0.7})` : 
+                               `rgba(0, 150, 136, ${0.3 + intensity * 0.7})`;
+                    } else {
+                        return '#e0e0e0'; // Inactive neuron
+                    }
+                })
+                .attr('stroke', '#333')
+                .attr('stroke-width', 2);
+            
+            // Draw output nodes
+            svg.selectAll('.output-node')
+                .data(outputNodes)
+                .enter()
+                .append('circle')
+                .attr('class', 'output-node')
+                .attr('cx', d => d.x)
+                .attr('cy', d => d.y)
+                .attr('r', 15)
+                .attr('fill', d => {
+                    const intensity = Math.min(Math.abs(d.value), 1);
+                    return d.value > 0 ? `rgba(156, 39, 176, ${0.3 + intensity * 0.7})` : 
+                           d.value < 0 ? `rgba(0, 150, 136, ${0.3 + intensity * 0.7})` : '#e0e0e0';
+                })
+                .attr('stroke', '#333')
+                .attr('stroke-width', 2);
+            
+            // Add labels for inputs
+            svg.selectAll('.input-label')
+                .data(inputNodes)
+                .enter()
+                .append('text')
+                .attr('class', 'input-label')
+                .attr('x', d => d.x - 25)
+                .attr('y', d => d.y + 5)
+                .attr('text-anchor', 'end')
+                .attr('font-size', '9px')
+                .attr('font-weight', 'bold')
+                .text(d => d.label);
+            
+            // Add labels for outputs
+            svg.selectAll('.output-label')
+                .data(outputNodes)
+                .enter()
+                .append('text')
+                .attr('class', 'output-label')
+                .attr('x', d => d.x + 25)
+                .attr('y', d => d.y + 5)
+                .attr('text-anchor', 'start')
+                .attr('font-size', '9px')
+                .attr('font-weight', 'bold')
+                .text(d => d.label);
+            
+            // Add layer labels
+            svg.append('text')
+                .attr('x', inputX)
+                .attr('y', 20)
+                .attr('text-anchor', 'middle')
+                .attr('font-size', '14px')
+                .attr('font-weight', 'bold')
+                .text('Input Layer');
+            
+            svg.append('text')
+                .attr('x', hiddenX)
+                .attr('y', 20)
+                .attr('text-anchor', 'middle')
+                .attr('font-size', '14px')
+                .attr('font-weight', 'bold')
+                .text('Hidden Layer');
+            
+            svg.append('text')
+                .attr('x', outputX)
+                .attr('y', 20)
+                .attr('text-anchor', 'middle')
+                .attr('font-size', '14px')
+                .attr('font-weight', 'bold')
+                .text('Output Layer');
         }
         
         // Initialize
