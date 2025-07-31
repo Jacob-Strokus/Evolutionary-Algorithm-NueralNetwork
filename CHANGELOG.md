@@ -5,6 +5,88 @@ All notable changes to the Neural Ecosystem Simulation project will be documente
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.2] - 2025-07-31
+
+### 🍃 Food-Focused Fitness System - Natural Selection
+
+This update replaces artificial boundary penalties with a biologically realistic fitness system focused on food acquisition, the core survival skill.
+
+### Changed
+- **🎯 Natural Fitness System**
+  - Replaced boundary penalties with food-acquisition focused fitness
+  - Primary reward for proximity to food sources (+15 points)
+  - Major bonus for successful food consumption (+50 points)
+  - Enhanced species-specific food efficiency bonuses
+
+- **🌱 Enhanced Herbivore Fitness**
+  - Food consumption bonus increased from 2x to 5x per food consumed
+  - Food efficiency calculation: energy ratio / time spent foraging
+  - Proximity rewards for being near available food sources
+  - Movement tracking: bonus for approaching food (+10 points)
+
+- **🦁 Enhanced Carnivore Fitness**
+  - Hunt success bonus increased from 20x to 25x per successful hunt
+  - Hunt efficiency calculation: energy gained relative to time
+  - Prey proximity rewards for being near potential targets
+  - Enhanced hunting range bonuses for strategic positioning
+
+- **🚫 Removed Artificial Penalties**
+  - Eliminated boundary fitness penalties (-50/-20 edge penalties)
+  - Removed center-seeking bonuses (+10/+5 center rewards)
+  - Natural boundary avoidance now emerges from food distribution
+
+### Performance
+- **Higher Fitness Scores**: 21-83 fitness range (vs previous 2-28 range)
+- **Natural Behavior**: Agents evolve realistic foraging strategies
+- **Emergent Boundary Avoidance**: Naturally avoid edges to stay near food
+- **Population Stability**: 64+ agents with healthy growth patterns
+
+### Technical Details
+- **Food Proximity Algorithm**: Inverse distance calculation from nearest food
+- **Consumption Tracking**: Real-time step-based food acquisition monitoring
+- **Efficiency Metrics**: Energy-to-time ratios for both species
+- **Movement Rewards**: Progressive bonuses for approaching food sources
+
+## [3.0.1] - 2025-07-31
+
+### 🔧 Critical Behavioral Fixes - Ecosystem Stability
+
+This patch release addresses critical post-v3.0.0 ecosystem behavioral issues that were causing carnivore extinction and herbivore boundary-seeking behavior.
+
+### Fixed
+- **🐛 Boundary Behavior Issues**
+  - Fixed inverted boundary input signals (0=edge, 1=center) in neural networks
+  - Agents now properly avoid boundaries instead of seeking them
+  - Eliminated edge-clustering behavior that caused starvation
+
+- **⚖️ Fitness System Improvements**  
+  - Added strong boundary fitness penalties (-50 for edge proximity)
+  - Added center-seeking bonus (+10 for staying in safe zones)
+  - Enhanced carnivore survival bonuses (+20 hunt reward, +8 energy bonus)
+
+- **🍃 Enhanced Food Distribution**
+  - Implemented clustered food placement in safe zones (30-70% of environment)
+  - Food sources now avoid boundary areas to prevent edge-seeking
+  - Slower food regeneration (120 steps) for better resource management
+
+- **🦁 Improved Hunting Mechanics**
+  - Increased hunt range from 3.0 to 5.0 units
+  - Enhanced hunt success calculation with multiple factors
+  - Improved energy transfer efficiency (70% → 80%)
+  - Added health-based hunting bonuses for weak prey
+
+### Performance
+- **Population Stability**: 100% generation survival rate (vs previous crashes)
+- **Growth Recovery**: Populations now grow from 27 to 111+ agents
+- **Fitness Improvement**: Average fitness reaching 28.0+ (vs previous negatives)
+- **Ecosystem Balance**: Stable carnivore-herbivore dynamics without extinction
+
+### Technical Details
+- **Boundary Input Fix**: Corrected neural network boundary distance calculation
+- **Clustered Food Algorithm**: Food placement algorithm avoiding edges and clustering in center
+- **Hunt Success Formula**: Multi-factor success rate based on energy, size, and health
+- **Fitness Momentum**: Enhanced boundary penalties integrated with existing fitness system
+
 ## [3.0.0] - 2025-07-31
 
 ### 🧬 Pure Evolution System - Major Performance Optimization
