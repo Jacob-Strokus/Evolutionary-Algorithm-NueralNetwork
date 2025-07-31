@@ -53,7 +53,7 @@ class Agent:
             self.reproduction_cost = 70  # Increased from 60
             self.energy_decay = 0.8  # Reduced from 2 - KEY CHANGE!
             self.speed = 3.0
-            self.vision_range = 20.0
+            self.vision_range = 25.0  # Increased from 20.0 - Better hunting sight
             self.size = 1.5
     
     def move_towards(self, target: Position, speed_multiplier: float = 1.0):
