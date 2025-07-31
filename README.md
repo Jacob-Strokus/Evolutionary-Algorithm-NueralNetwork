@@ -61,7 +61,7 @@ python examples/main_neural.py
 ```bash
 # Clone the repository
 git clone <repository-url>
-cd coolshit
+cd <repo>
 
 # Install dependencies
 pip install -r requirements.txt
