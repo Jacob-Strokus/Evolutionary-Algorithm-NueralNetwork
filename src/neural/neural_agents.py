@@ -36,9 +36,9 @@ class NeuralAgent(Agent):
         # Food acquisition tracking for fitness
         self.food_consumed_this_step = False
         self.last_food_distance = float('inf')
+        self.last_action = None
         
         # Behavioral modifiers
-        self.last_action = None
         self.action_cooldown = 0
         self.was_hunted = False  # Track if hunted this step
         
@@ -59,6 +59,9 @@ class NeuralAgent(Agent):
         """Execute movement based on neural network decision"""
         try:
             actions = self.make_neural_decision(environment)
+            
+            # Store action for fitness calculation
+            self.last_action = actions.copy()
             
             # Extract movement components
             move_x = actions['move_x']
@@ -86,6 +89,8 @@ class NeuralAgent(Agent):
         except Exception as e:
             # Fallback to random movement if neural network fails
             self.random_move()
+            # Store null action for failed neural decisions
+            self.last_action = {'move_x': 0, 'move_y': 0, 'intensity': 0, 'should_reproduce': False}
             return None
         
         return None
@@ -191,13 +196,58 @@ class NeuralAgent(Agent):
             # Inverse distance reward - closer to food = higher fitness
             max_distance = math.sqrt(environment.width**2 + environment.height**2)
             proximity_ratio = 1.0 - (nearest_food_distance / max_distance)
-            food_fitness += proximity_ratio * 15  # Strong reward for being near food
+            food_fitness += proximity_ratio * 20  # Increased reward for being near food
             
             # Extra bonus for being very close to food (within interaction range)
             if nearest_food_distance <= 5.0:  # Close enough to potentially consume
-                food_fitness += 25  # Big bonus for being in food acquisition range
+                food_fitness += 30  # Increased bonus for being in food acquisition range
+            
+            # ENHANCED: Direction bonus for moving toward food
+            if hasattr(self, 'last_food_distance') and hasattr(self, 'last_action'):
+                if (not math.isinf(self.last_food_distance) and not math.isinf(nearest_food_distance) and
+                    not math.isnan(self.last_food_distance) and not math.isnan(nearest_food_distance)):
+                    
+                    if nearest_food_distance < self.last_food_distance:
+                        # Agent moved closer to food - big reward!
+                        improvement = self.last_food_distance - nearest_food_distance
+                        food_fitness += min(improvement * 5, 25)  # Cap to prevent huge values
+                    elif nearest_food_distance > self.last_food_distance:
+                        # Agent moved away from food - small penalty
+                        regression = nearest_food_distance - self.last_food_distance
+                        food_fitness -= min(regression * 2, 10)  # Cap penalty too
+            
+            # ENHANCED: Movement direction alignment bonus
+            if nearest_food and hasattr(self, 'last_action') and self.last_action:
+                # Calculate direction to food
+                food_dx = nearest_food.position.x - self.position.x
+                food_dy = nearest_food.position.y - self.position.y
                 
-            # Bonus for moving towards food (check if getting closer)
+                # Get agent's last movement direction
+                move_x = self.last_action.get('move_x', 0)
+                move_y = self.last_action.get('move_y', 0)
+                
+                # Calculate alignment between movement and food direction
+                if abs(food_dx) > 0.1 or abs(food_dy) > 0.1:  # Avoid division by zero
+                    # Normalize vectors
+                    food_length = math.sqrt(food_dx**2 + food_dy**2)
+                    move_length = math.sqrt(move_x**2 + move_y**2)
+                    
+                    if food_length > 0 and move_length > 0:
+                        food_unit_x = food_dx / food_length
+                        food_unit_y = food_dy / food_length
+                        move_unit_x = move_x / move_length
+                        move_unit_y = move_y / move_length
+                        
+                        # Dot product gives alignment (-1 to 1)
+                        alignment = food_unit_x * move_unit_x + food_unit_y * move_unit_y
+                        
+                        # Reward positive alignment (moving toward food)
+                        if alignment > 0 and not math.isinf(alignment) and not math.isnan(alignment):
+                            food_fitness += min(alignment * 8, 20)  # Cap the bonus to prevent infinity
+            
+            # Ensure distance tracking doesn't cause infinity
+            if not math.isinf(nearest_food_distance) and not math.isnan(nearest_food_distance):
+                self.last_food_distance = nearest_food_distance
             if hasattr(self, 'last_food_distance'):
                 if nearest_food_distance < self.last_food_distance:
                     food_fitness += 10  # Reward for improving food approach

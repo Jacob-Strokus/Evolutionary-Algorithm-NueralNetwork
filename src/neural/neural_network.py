@@ -151,11 +151,11 @@ class SensorSystem:
         [0] Energy level (0-1)
         [1] Age normalized (0-1)
         [2] Distance to nearest food (0-1)
-        [3] Angle to nearest food (-1 to 1)
-        [4] Distance to nearest threat/prey (0-1)
-        [5] Angle to nearest threat/prey (-1 to 1)
-        [6] Population density nearby (0-1)
-        [7] Reproduction readiness (0-1)
+        [3] Food direction X (normalized movement toward food: -1=left, +1=right)
+        [4] Food direction Y (normalized movement toward food: -1=up, +1=down)
+        [5] Distance to nearest threat/prey (0-1)
+        [6] Threat/prey direction X (-1=left, +1=right)
+        [7] Threat/prey direction Y (-1=up, +1=down)
         [8] Distance to nearest X boundary (0-1)
         [9] Distance to nearest Y boundary (0-1)
         """
@@ -167,66 +167,91 @@ class SensorSystem:
         # Age (normalized to expected lifespan)
         inputs[1] = min(1.0, agent.age / 1000.0)
         
-        # Find nearest food
+        # ENHANCED: Find nearest food with clear directional signals
         nearest_food = environment.find_nearest_food(agent)
         if nearest_food:
             distance = agent.position.distance_to(nearest_food.position)
             inputs[2] = min(1.0, distance / agent.vision_range)
             
-            # Angle to food
+            # CLEAR FOOD DIRECTION: Normalized unit vectors pointing toward food
             dx = nearest_food.position.x - agent.position.x
             dy = nearest_food.position.y - agent.position.y
-            angle = math.atan2(dy, dx) / math.pi  # Normalize to -1 to 1
-            inputs[3] = angle
+            
+            # Create unit vector (length = 1) for clear direction
+            direction_magnitude = math.sqrt(dx*dx + dy*dy)
+            if direction_magnitude > 0:
+                inputs[3] = dx / direction_magnitude  # Food direction X (unit vector)
+                inputs[4] = dy / direction_magnitude  # Food direction Y (unit vector)
+            else:
+                inputs[3] = 0.0  # No direction if at same position
+                inputs[4] = 0.0
         else:
             inputs[2] = 1.0  # No food visible
-            inputs[3] = 0.0
+            inputs[3] = 0.0  # No food direction
+            inputs[4] = 0.0
         
-        # Find nearest threat or prey
+        # ENHANCED: Find nearest threat or prey with directional signals
         if agent.species_type.value == "herbivore":
             nearest_threat = environment.find_nearest_threat(agent)
             if nearest_threat:
                 distance = agent.position.distance_to(nearest_threat.position)
-                inputs[4] = min(1.0, distance / agent.vision_range)
+                inputs[5] = min(1.0, distance / agent.vision_range)
                 
+                # CLEAR THREAT DIRECTION: Unit vector for avoidance
                 dx = nearest_threat.position.x - agent.position.x
                 dy = nearest_threat.position.y - agent.position.y
-                angle = math.atan2(dy, dx) / math.pi
-                inputs[5] = angle
+                direction_magnitude = math.sqrt(dx*dx + dy*dy)
+                if direction_magnitude > 0:
+                    inputs[6] = dx / direction_magnitude  # Threat direction X (unit vector)
+                    inputs[7] = dy / direction_magnitude  # Threat direction Y (unit vector)
+                else:
+                    inputs[6] = 0.0
+                    inputs[7] = 0.0
             else:
-                inputs[4] = 1.0  # No threat visible
-                inputs[5] = 0.0
+                inputs[5] = 1.0  # No threat visible
+                inputs[6] = 0.0
+                inputs[7] = 0.0
         else:  # Carnivore
             nearest_prey = environment.find_nearest_prey(agent)
             if nearest_prey:
                 distance = agent.position.distance_to(nearest_prey.position)
-                inputs[4] = min(1.0, distance / agent.vision_range)
+                inputs[5] = min(1.0, distance / agent.vision_range)
                 
+                # CLEAR PREY DIRECTION: Unit vector for hunting
                 dx = nearest_prey.position.x - agent.position.x
                 dy = nearest_prey.position.y - agent.position.y
-                angle = math.atan2(dy, dx) / math.pi
-                inputs[5] = angle
+                direction_magnitude = math.sqrt(dx*dx + dy*dy)
+                if direction_magnitude > 0:
+                    inputs[6] = dx / direction_magnitude  # Prey direction X (unit vector)
+                    inputs[7] = dy / direction_magnitude  # Prey direction Y (unit vector)
+                else:
+                    inputs[6] = 0.0
+                    inputs[7] = 0.0
             else:
-                inputs[4] = 1.0  # No prey visible
-                inputs[5] = 0.0
+                inputs[5] = 1.0  # No prey visible
+                inputs[6] = 0.0
+                inputs[7] = 0.0
         
-        # Population density (count nearby agents)
-        nearby_count = 0
-        for other_agent in environment.agents:
-            if other_agent != agent and other_agent.is_alive:
-                distance = agent.position.distance_to(other_agent.position)
-                if distance <= agent.vision_range:
-                    nearby_count += 1
-        inputs[6] = min(1.0, nearby_count / 10.0)  # Normalize to max 10 nearby agents
-        
-        # Reproduction readiness
-        inputs[7] = 1.0 if agent.can_reproduce() else 0.0
-        
+        # ENHANCED: Boundary safety signals (higher values = safer from boundaries)
         # Distance to nearest X boundary (0 = at boundary, 1 = center)
         distance_to_left = agent.position.x
         distance_to_right = environment.width - agent.position.x
         min_x_distance = min(distance_to_left, distance_to_right)
         max_x_distance = environment.width / 2  # Maximum possible distance from center
+        
+        # Higher values = safer (away from boundary)
+        x_center_ratio = min_x_distance / max_x_distance
+        inputs[8] = min(1.0, x_center_ratio)
+        
+        # Distance to nearest Y boundary (0 = at boundary, 1 = center)  
+        distance_to_top = agent.position.y
+        distance_to_bottom = environment.height - agent.position.y
+        min_y_distance = min(distance_to_top, distance_to_bottom)
+        max_y_distance = environment.height / 2  # Maximum possible distance from center
+        
+        # Higher values = safer (away from boundary)
+        y_center_ratio = min_y_distance / max_y_distance
+        inputs[9] = min(1.0, y_center_ratio)
         
         # FIXED: Invert boundary signal - higher values = safer (away from boundary)
         x_center_ratio = min_x_distance / max_x_distance
