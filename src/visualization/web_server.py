@@ -1068,7 +1068,7 @@ class EcosystemWebServer:
                         .attr('y1', inputNodes[i].y)
                         .attr('x2', hiddenNodes[j].x)
                         .attr('y2', hiddenNodes[j].y)
-                        .attr('stroke', weight > 0 ? '#4CAF50' : '#f44336')
+                        .attr('stroke', weight > 0 ? '#2196F3' : '#FF9800')
                         .attr('stroke-width', Math.min(Math.abs(weight) * 3, 5))
                         .attr('opacity', Math.max(0.2, Math.min(connectionStrength * 2, 0.9)));
                 }
@@ -1086,7 +1086,7 @@ class EcosystemWebServer:
                         .attr('y1', hiddenNodes[i].y)
                         .attr('x2', outputNodes[j].x)
                         .attr('y2', outputNodes[j].y)
-                        .attr('stroke', weight > 0 ? '#4CAF50' : '#f44336')
+                        .attr('stroke', weight > 0 ? '#2196F3' : '#FF9800')
                         .attr('stroke-width', Math.min(Math.abs(weight) * 3, 5))
                         .attr('opacity', Math.max(0.2, Math.min(connectionStrength * 2, 0.9)));
                 }
@@ -1103,8 +1103,8 @@ class EcosystemWebServer:
                 .attr('r', 15)
                 .attr('fill', d => {
                     const intensity = Math.min(Math.abs(d.value), 1);
-                    return d.value > 0 ? `rgba(76, 175, 80, ${0.3 + intensity * 0.7})` : 
-                           d.value < 0 ? `rgba(244, 67, 54, ${0.3 + intensity * 0.7})` : '#e0e0e0';
+                    return d.value > 0 ? `rgba(156, 39, 176, ${0.3 + intensity * 0.7})` : 
+                           d.value < 0 ? `rgba(0, 150, 136, ${0.3 + intensity * 0.7})` : '#e0e0e0';
                 })
                 .attr('stroke', '#333')
                 .attr('stroke-width', 2);
@@ -1121,8 +1121,8 @@ class EcosystemWebServer:
                 .attr('fill', d => {
                     const intensity = Math.min(Math.abs(d.value), 1);
                     if (Math.abs(d.value) > 0.1) {
-                        return d.value > 0 ? `rgba(76, 175, 80, ${0.3 + intensity * 0.7})` : 
-                               `rgba(244, 67, 54, ${0.3 + intensity * 0.7})`;
+                        return d.value > 0 ? `rgba(156, 39, 176, ${0.3 + intensity * 0.7})` : 
+                               `rgba(0, 150, 136, ${0.3 + intensity * 0.7})`;
                     } else {
                         return '#e0e0e0'; // Inactive neuron
                     }
@@ -1141,8 +1141,8 @@ class EcosystemWebServer:
                 .attr('r', 15)
                 .attr('fill', d => {
                     const intensity = Math.min(Math.abs(d.value), 1);
-                    return d.value > 0 ? `rgba(76, 175, 80, ${0.3 + intensity * 0.7})` : 
-                           d.value < 0 ? `rgba(244, 67, 54, ${0.3 + intensity * 0.7})` : '#e0e0e0';
+                    return d.value > 0 ? `rgba(156, 39, 176, ${0.3 + intensity * 0.7})` : 
+                           d.value < 0 ? `rgba(0, 150, 136, ${0.3 + intensity * 0.7})` : '#e0e0e0';
                 })
                 .attr('stroke', '#333')
                 .attr('stroke-width', 2);
