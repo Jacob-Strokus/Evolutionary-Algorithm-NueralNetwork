@@ -83,8 +83,17 @@ class NeuralAgent(Agent):
             self.position.y += move_y * move_distance
             
             # Handle reproduction decision
-            if should_reproduce and self.can_reproduce() and self.action_cooldown <= 0:
-                return self.neural_reproduce()
+            if should_reproduce and self.action_cooldown <= 0:
+                if self.can_reproduce():
+                    return self.neural_reproduce()
+                elif (self.species_type == SpeciesType.HERBIVORE and 
+                      self.energy >= self.reproduction_threshold and 
+                      self.reproduction_cooldown <= 0 and 
+                      self.age > 50 and 
+                      self.lifetime_food_consumed < 1):
+                    # Debug: Herbivore wants to reproduce but hasn't eaten enough food
+                    # Uncomment for debugging: print(f"🌱 Herbivore {self.id} can't reproduce - only ate {self.lifetime_food_consumed}/1 food")
+                    pass
             
         except Exception as e:
             # Fallback to random movement if neural network fails
@@ -94,6 +103,28 @@ class NeuralAgent(Agent):
             return None
         
         return None
+    
+    def can_reproduce(self) -> bool:
+        """Enhanced reproduction check - herbivores must have eaten food to reproduce"""
+        # Use parent's basic reproduction check first
+        base_can_reproduce = (self.energy >= self.reproduction_threshold and 
+                             self.reproduction_cooldown <= 0 and 
+                             self.age > 50)
+        
+        if not base_can_reproduce:
+            return False
+        
+        # Additional requirement for herbivores: must have consumed food
+        if self.species_type == SpeciesType.HERBIVORE:
+            # Herbivores need to have eaten at least 1 food source to reproduce
+            # This ensures they've demonstrated successful foraging before reproducing
+            min_food_required = 1
+            if self.lifetime_food_consumed < min_food_required:
+                return False
+        
+        # Carnivores can reproduce with just the basic requirements
+        # (they get energy from hunting, which is already tracked separately)
+        return True
     
     def neural_reproduce(self) -> 'NeuralAgent':
         """Create offspring with inherited and mutated neural network"""
