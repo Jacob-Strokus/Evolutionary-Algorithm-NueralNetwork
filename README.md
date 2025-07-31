@@ -61,15 +61,28 @@ python examples/main_neural.py
 # 4. Extended Neural Simulation (1500 steps)
 ```
 
-### Web-Based Real-time Visualization
-The neural simulations include an integrated web server that provides:
-- Live ecosystem visualization
+### Advanced Web-Based Real-time Visualization
+```bash
+python main.py --web
+# Open browser to: http://localhost:5000
+```
+
+The advanced neural ecosystem web interface provides:
+- **🖥️ Real-time Display**: Live simulation without page refresh
+- **🧠 Neural Inspection**: Click any agent to view its neural network structure
+- **📊 Live Metrics**: Real-time population, energy, and generation charts
+- **⚡ Speed Controls**: Adjust simulation speed (10ms - 500ms per step)
+- **📈 Neural Diversity**: Visualize genetic diversity and evolution
+- **🎯 D3.js Diagrams**: Interactive neural network visualizations
+- **📱 Responsive Design**: Works on desktop, tablet, and mobile devices
+- **🔄 WebSocket Communication**: Instant updates via WebSocket technology
+
+Key Features:
 - Interactive agent inspection (click on any agent)
 - Real-time fitness and population charts
-- Neural network structure visualization
+- Neural network structure visualization with weights and biases
 - Generation tracking and evolutionary lineage
-
-Access at `http://localhost:5000` when running neural simulations.
+- Customizable simulation speed controls
 
 ### Traditional Ecosystem
 ```bash

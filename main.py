@@ -4,14 +4,25 @@ Neural Ecosystem Simulation - Main Entry Point
 ==============================================
 
 Main launcher for the neural network ecosystem simulation with generation tracking
-and web-based visualization. This is the primary entry point for running the
+and advanced web-based visualization. This is the primary entry point for running the
 complete neural ecosystem with all features enabled.
+
+🌟 NEW: Advanced Web Interface with real-time WebSocket connectivity!
 
 Usage:
     python main.py              # Run standard neural simulation
-    python main.py --web        # Run with web interface
+    python main.py --web        # Run with ADVANCED web interface (RECOMMENDED!)
     python main.py --analysis   # Run with detailed analysis
     python main.py --extended   # Run extended 1500-step simulation
+
+Web Interface Features:
+    • Real-time simulation display without page refresh
+    • Interactive neural network inspection (click agents!)
+    • Live population and energy charts
+    • Adjustable simulation speed controls
+    • D3.js neural network visualizations
+    • Mobile-responsive design
+    • WebSocket real-time communication
 """
 
 import sys
@@ -22,7 +33,7 @@ import argparse
 project_root = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, project_root)
 
-
+# Import from our organized src structure
 from src.neural.neural_agents import NeuralEnvironment, NeuralAgent
 from src.analysis.neural_inspector import NeuralNetworkInspector
 from src.core.ecosystem import SpeciesType
@@ -70,7 +81,13 @@ class SimpleEcosystemWrapper:
     def update_step(self):
         """Update step count and run environment update"""
         self.step_count += 1
-        self.env.update()
+        # Use step() method for neural environments, fallback to update()
+        if hasattr(self.env, 'step'):
+            self.env.step()
+        elif hasattr(self.env, 'update'):
+            self.env.update()
+        else:
+            print("❌ Environment has no step() or update() method")
 
 def run_standard_simulation(steps=500):
     """Run a standard neural ecosystem simulation."""
@@ -126,14 +143,18 @@ def run_standard_simulation(steps=500):
 
 def run_web_simulation(steps=1000):
     """Run simulation with web-based visualization."""
-    print("🌐 Starting Neural Ecosystem with Web Interface")
+    print("🌐 Starting Neural Ecosystem Web Interface")
     print("=" * 50)
     
-    # Import web server only when needed
-    from src.visualization.realtime_web_server import EcosystemWebServer
+    # Import the new clean web server
+    from src.visualization.web_server import EcosystemWebServer
     
     # Create environment
     env = NeuralEnvironment(width=100, height=100, use_neural_agents=True)
+    
+    print(f"🦌 Initial Herbivores: {len([a for a in env.agents if a.species_type == SpeciesType.HERBIVORE])}")
+    print(f"🐺 Initial Carnivores: {len([a for a in env.agents if a.species_type == SpeciesType.CARNIVORE])}")
+    print(f"🌱 Food Sources: {len(env.food_sources)}")
     
     # Create simple wrapper for web server
     canvas = SimpleEcosystemWrapper(env)
@@ -141,13 +162,19 @@ def run_web_simulation(steps=1000):
     # Create web server
     web_server = EcosystemWebServer(canvas)
     
-    print("🚀 Starting web server...")
+    print("\n🚀 Starting web server...")
     print("📱 Open your browser to: http://localhost:5000")
-    print("🔍 Click on agents to inspect their neural networks!")
-    print("⚡ Press Ctrl+C to stop the simulation")
+    print("\n🔍 Features:")
+    print("   • 🖥️  Real-time simulation display")
+    print("   • 🎮 Interactive start/stop controls")
+    print("   • ⚡ Adjustable simulation speed")
+    print("   • � Live population statistics")
+    print("   • 🔄 WebSocket real-time updates")
+    print("\n⚡ Press Ctrl+C to stop the simulation")
+    print("💡 TIP: Click 'Start Simulation' button to begin!")
     
     try:
-        # Start the web server (this will run the simulation loop)
+        # Start the web server
         web_server.start_server()
     except KeyboardInterrupt:
         print("\n🛑 Simulation stopped by user")

@@ -104,7 +104,7 @@ When reporting bugs, please include:
 - **`neural_agents.py`**: Main neural agent implementation
 - **`neural_network.py`**: Neural network architecture and sensory systems
 - **`genetic_evolution.py`**: Genetic algorithms and crossover operations
-- **`realtime_web_server.py`**: Web interface and agent inspection
+- **`advanced_web_server.py`**: Advanced web interface with neural network inspection
 
 ## 🎨 Adding New Features
 
