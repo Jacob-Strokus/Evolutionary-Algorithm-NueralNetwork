@@ -255,11 +255,15 @@ class NeuralAgent(Agent):
         
         # Major bonus for actual food consumption
         if hasattr(self, 'food_consumed_this_step') and self.food_consumed_this_step:
-            food_fitness += 50  # Huge reward for successful food acquisition
+            if self.species_type == SpeciesType.HERBIVORE:
+                food_fitness += 50  # Huge reward for successful food acquisition
+            else:  # Carnivore
+                food_fitness += 50  # Same huge reward for successful hunt
             self.food_consumed_this_step = False
         
         # For carnivores, consider prey proximity as "food"
         if self.species_type == SpeciesType.CARNIVORE:
+            nearest_prey = None
             nearest_prey_distance = float('inf')
             for agent in environment.agents:
                 if (agent.species_type == SpeciesType.HERBIVORE and 
@@ -267,6 +271,7 @@ class NeuralAgent(Agent):
                     distance = self.position.distance_to(agent.position)
                     if distance < nearest_prey_distance:
                         nearest_prey_distance = distance
+                        nearest_prey = agent
             
             # Reward carnivores for being near potential prey
             if nearest_prey_distance < float('inf'):
@@ -277,6 +282,50 @@ class NeuralAgent(Agent):
                 # Extra bonus for being in hunting range
                 if nearest_prey_distance <= 8.0:  # Within hunting range
                     food_fitness += 20
+                
+                # ENHANCED: Movement direction alignment bonus for carnivores (same as herbivores)
+                if nearest_prey and hasattr(self, 'last_action') and self.last_action:
+                    # Calculate direction to prey
+                    prey_dx = nearest_prey.position.x - self.position.x
+                    prey_dy = nearest_prey.position.y - self.position.y
+                    
+                    # Get agent's last movement direction
+                    move_x = self.last_action.get('move_x', 0)
+                    move_y = self.last_action.get('move_y', 0)
+                    
+                    # Calculate alignment between movement and prey direction
+                    if abs(prey_dx) > 0.1 or abs(prey_dy) > 0.1:  # Avoid division by zero
+                        # Normalize vectors
+                        prey_length = math.sqrt(prey_dx**2 + prey_dy**2)
+                        move_length = math.sqrt(move_x**2 + move_y**2)
+                        
+                        if prey_length > 0 and move_length > 0:
+                            prey_unit_x = prey_dx / prey_length
+                            prey_unit_y = prey_dy / prey_length
+                            move_unit_x = move_x / move_length
+                            move_unit_y = move_y / move_length
+                            
+                            # Dot product gives alignment (-1 to 1)
+                            alignment = prey_unit_x * move_unit_x + prey_unit_y * move_unit_y
+                            
+                            # Reward positive alignment (moving toward prey)
+                            if alignment > 0 and not math.isinf(alignment) and not math.isnan(alignment):
+                                food_fitness += min(alignment * 8, 20)  # Cap the bonus to prevent infinity
+                
+                # Track prey distance for improvement rewards (same as herbivore food distance tracking)
+                if hasattr(self, 'last_prey_distance'):
+                    if nearest_prey_distance < self.last_prey_distance:
+                        # Agent moved closer to prey - big reward!
+                        improvement = self.last_prey_distance - nearest_prey_distance
+                        food_fitness += min(improvement * 5, 25)  # Cap to prevent huge values
+                    elif nearest_prey_distance > self.last_prey_distance:
+                        # Agent moved away from prey - small penalty
+                        regression = nearest_prey_distance - self.last_prey_distance
+                        food_fitness -= min(regression * 2, 10)  # Cap penalty too
+                
+                # Ensure distance tracking doesn't cause infinity
+                if not math.isinf(nearest_prey_distance) and not math.isnan(nearest_prey_distance):
+                    self.last_prey_distance = nearest_prey_distance
         
         return food_fitness
     

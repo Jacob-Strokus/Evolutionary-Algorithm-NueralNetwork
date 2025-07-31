@@ -24,7 +24,7 @@ class Position:
 class Food:
     position: Position
     energy_value: int = 40  # Increased from 20 - more rewarding food!
-    regeneration_time: int = 100  # Steps until food respawns
+    regeneration_time: int = 140  # Steps until food respawns
     current_regen: int = 0
     is_available: bool = True
 
@@ -184,7 +184,7 @@ class Environment:
                     random.uniform(self.height * 0.25, self.height * 0.75)
                 )
                 food = Food(pos)
-                food.regeneration_time = 120  # Slightly slower regeneration
+                food.regeneration_time = 150  # Slower regeneration
                 self.food_sources.append(food)
     
     def _add_clustered_food(self, count: int):
@@ -209,7 +209,7 @@ class Environment:
                 food_y = max(self.height * 0.2, min(self.height * 0.8, center_y + offset_y))
                 
                 food = Food(Position(food_x, food_y))
-                food.regeneration_time = 120  # Slower regeneration for balance
+                food.regeneration_time = 150  # Slower regeneration for balance
                 self.food_sources.append(food)
     
     def get_neural_stats(self) -> dict:
