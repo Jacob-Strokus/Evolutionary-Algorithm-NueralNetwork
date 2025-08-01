@@ -199,7 +199,7 @@ def run_standard_simulation(steps=500):
             
             print(f"Step {step}: 🦌 {herbivores} herbivores, 🐺 {carnivores} carnivores, 🧬 Generations: {sorted(generations)}")
         
-        env.update()
+        env.step()
         
         # Check for extinction
         if len(env.agents) == 0:
