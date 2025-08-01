@@ -292,9 +292,12 @@ class EvolutionaryNeuralNetwork:
         """Crossover weight matrices from two parents"""
         # Determine the size to use (minimum of parents and offspring)
         min_hidden = min(self.hidden_size, parent1.hidden_size, parent2.hidden_size)
+        min_input = min(self.weights_input_hidden.shape[0], 
+                       parent1.weights_input_hidden.shape[0], 
+                       parent2.weights_input_hidden.shape[0])
         
         # Crossover input-to-hidden weights
-        for i in range(self.weights_input_hidden.shape[0]):
+        for i in range(min_input):
             for j in range(min_hidden):
                 if random.random() < 0.5:
                     self.weights_input_hidden[i, j] = parent1.weights_input_hidden[i, j]
