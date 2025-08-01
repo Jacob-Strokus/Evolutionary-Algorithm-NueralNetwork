@@ -16,11 +16,14 @@ class NeuralAgent(Agent):
                  neural_config: NeuralNetworkConfig = None, generation: int = 1):
         super().__init__(species_type, position, agent_id)
         
-        # Initialize neural network
+        # Initialize neural network with food-seeking bias
         if neural_config is None:
             neural_config = NeuralNetworkConfig()
         
         self.brain = NeuralNetwork(neural_config)
+        
+        # BOUNDARY CLUSTERING FIX: Apply food-seeking bias to initial weights
+        self._apply_food_seeking_bias()
         
         # Generation tracking
         self.generation = generation  # Which generation this agent belongs to
@@ -53,12 +56,23 @@ class NeuralAgent(Agent):
         # Interpret outputs as actions
         actions = SensorSystem.interpret_network_output(neural_outputs)
         
+        # BOUNDARY CLUSTERING FIX: When standing on food (distance=0), reduce movement dramatically
+        food_distance = sensory_inputs[2]  # Input [2] is food distance
+        if food_distance <= 0.01:  # Standing on or very close to food
+            # Reduce movement by 80% to encourage staying on food
+            actions['move_x'] *= 0.2
+            actions['move_y'] *= 0.2
+            actions['intensity'] = max(0.1, actions['intensity'] * 0.3)  # Reduce movement intensity
+        
         return actions
     
     def neural_move(self, environment: Environment):
         """Execute movement based on neural network decision"""
         try:
             actions = self.make_neural_decision(environment)
+            
+            # Track last action for fitness calculation
+            self.last_action = actions
             
             # Extract movement components
             move_x = actions['move_x']
@@ -208,6 +222,15 @@ class NeuralAgent(Agent):
             food_fitness += 50  # Huge reward for successful food acquisition
             self.food_consumed_this_step = False
         
+        # BOUNDARY CLUSTERING FIX: Reward staying still when on food
+        if nearest_food_distance < float('inf') and nearest_food_distance <= 2.0:
+            # Agent is very close to or on food - reward low movement
+            if hasattr(self, 'last_action') and self.last_action:
+                movement_magnitude = (self.last_action.get('move_x', 0)**2 + 
+                                    self.last_action.get('move_y', 0)**2)**0.5
+                if movement_magnitude < 0.2:  # Very low movement when near food
+                    food_fitness += 30  # Big reward for staying near food instead of wandering
+        
         # For carnivores, consider prey proximity as "food"
         if self.species_type == SpeciesType.CARNIVORE:
             nearest_prey_distance = float('inf')
@@ -263,6 +286,33 @@ class NeuralAgent(Agent):
         
         # Age the neural network
         self.brain.age += 1
+    
+    def _apply_food_seeking_bias(self):
+        """Apply initial weight bias to encourage food-seeking behavior over boundary clustering"""
+        # Safety check: ensure network has the expected input size
+        if self.brain.weights_input_hidden.shape[0] < 10:
+            print(f"⚠️ Warning: Neural network has {self.brain.weights_input_hidden.shape[0]} inputs, expected 10. Skipping food-seeking bias.")
+            return
+        
+        # Bias the input-to-hidden weights to prioritize food inputs
+        food_distance_idx = 2  # Input [2] is food distance
+        food_angle_idx = 3     # Input [3] is food angle  
+        boundary_x_idx = 8     # Input [8] is X boundary distance
+        boundary_y_idx = 9     # Input [9] is Y boundary distance
+        
+        # SOLUTION 1: Increase weights for food-related inputs (make food more important)
+        self.brain.weights_input_hidden[food_distance_idx, :] *= 3.0  # Increased from 2.0
+        self.brain.weights_input_hidden[food_angle_idx, :] *= 3.0     # Increased from 2.0
+        
+        # SOLUTION 2: Reduce weights for boundary inputs (prevent boundary obsession)
+        self.brain.weights_input_hidden[boundary_x_idx, :] *= 0.2     # Reduced from 0.3
+        self.brain.weights_input_hidden[boundary_y_idx, :] *= 0.2     # Reduced from 0.3     
+        
+        # SOLUTION 3: Initialize output biases to encourage food-seeking behavior
+        # Small positive bias to encourage movement and exploration
+        self.brain.bias_output[0] += 0.05  # Move X bias (slight exploration)
+        self.brain.bias_output[1] += 0.05  # Move Y bias (slight exploration) 
+        self.brain.bias_output[3] += 0.2   # Intensity bias (be more active)
 
 class NeuralEnvironment(Environment):
     """Enhanced environment that works with neural agents"""
@@ -293,7 +343,7 @@ class NeuralEnvironment(Environment):
     def _initialize_neural_agents(self):
         """Create initial population of neural agents"""
         neural_config = NeuralNetworkConfig(
-            input_size=8,
+            input_size=10,  # Updated for boundary awareness (was 8)
             hidden_size=12,
             output_size=4,
             mutation_rate=0.15,
