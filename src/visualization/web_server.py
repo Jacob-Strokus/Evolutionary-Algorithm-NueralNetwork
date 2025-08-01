@@ -171,7 +171,8 @@ class EcosystemWebServer:
             'energy': target_agent.energy,
             'age': getattr(target_agent, 'age', 0),
             'generation': getattr(target_agent, 'generation', 0),
-            'fitness': getattr(target_agent.brain, 'fitness_score', 0) if hasattr(target_agent, 'brain') else 0
+            'fitness': getattr(target_agent.brain, 'fitness_score', 0) if hasattr(target_agent, 'brain') else 0,
+            'food_consumed': getattr(target_agent, 'lifetime_food_consumed', 0)
         }
         
         # Extract neural network information if available
@@ -633,6 +634,7 @@ class EcosystemWebServer:
                     <p><strong>Age:</strong> <span id="agent-age">-</span> steps</p>
                     <p><strong>Generation:</strong> <span id="agent-generation">-</span></p>
                     <p><strong>Fitness:</strong> <span id="agent-fitness">-</span></p>
+                    <p><strong>Food Consumed:</strong> <span id="agent-food-consumed">-</span></p>
                 </div>
                 
                 <div class="info-card">
@@ -902,6 +904,7 @@ class EcosystemWebServer:
             updateFieldWithHighlight('agent-age', agentData.age);
             updateFieldWithHighlight('agent-generation', agentData.generation);
             updateFieldWithHighlight('agent-fitness', agentData.fitness.toFixed(1));
+            updateFieldWithHighlight('agent-food-consumed', agentData.food_consumed || 0);
             updateFieldWithHighlight('agent-x', agentData.position.x.toFixed(1));
             updateFieldWithHighlight('agent-y', agentData.position.y.toFixed(1));
             
