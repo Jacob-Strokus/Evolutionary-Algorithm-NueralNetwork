@@ -4,6 +4,7 @@ Agent designed for evolution-driven learning with enhanced capabilities
 """
 import numpy as np
 import math
+import random
 from typing import Dict, Any, Optional, List, Tuple
 from collections import defaultdict, deque
 from dataclasses import dataclass
@@ -11,6 +12,7 @@ from dataclasses import dataclass
 from src.core.ecosystem import SpeciesType, Position
 from src.neural.evolutionary_network import EvolutionaryNeuralNetwork, EvolutionaryNetworkConfig
 from src.neural.evolutionary_sensors import EvolutionarySensorSystem
+from src.evolution.advanced_fitness import AdvancedFitnessEvaluator
 
 @dataclass
 class EvolutionaryAgentConfig:
@@ -18,7 +20,8 @@ class EvolutionaryAgentConfig:
     max_energy: float = 100.0
     reproduction_cost: float = 50.0
     movement_cost_per_unit: float = 0.1
-    age_energy_cost: float = 0.05
+    age_energy_cost: float = 0.05  # Base energy cost for herbivores
+    carnivore_energy_cost: float = 1.0  # Reduced energy cost for carnivores without food
     reproduction_cooldown: int = 20
     memory_tracking: bool = True
     social_learning: bool = True
@@ -48,12 +51,15 @@ class EvolutionaryNeuralAgent:
             self.vision_range = 15.0
             self.speed = 1.5
         else:  # CARNIVORE
-            self.vision_range = 20.0
-            self.speed = 2.0
+            self.vision_range = 30.0  # Increased vision for better prey tracking
+            self.speed = 2.5  # Increased speed for better hunting
         
         # Enhanced neural network
         net_config = network_config or EvolutionaryNetworkConfig()
         self.brain = EvolutionaryNeuralNetwork(net_config)
+        
+        # Advanced fitness evaluator (can be overridden by environment's global evaluator)
+        self.fitness_evaluator = None  # Will be set by environment
         
         # Memory and learning systems
         self.last_position = position
@@ -78,9 +84,42 @@ class EvolutionaryNeuralAgent:
         self.exploration_regions = set() if self.config.exploration_tracking else None
         self.novelty_bonus = 0.0
         
-    def update(self, environment) -> Optional[Dict[str, Any]]:
+        # Starvation tracking for carnivores
+        self.last_fed_time = 0  # Track when carnivore last ate
+        self.steps_since_fed = 0
+        
+    def update(self, environment=None) -> Optional[Dict[str, Any]]:
         """Enhanced update with evolutionary learning"""
         if not self.is_alive:
+            return None
+        
+        # If no environment provided, create a basic update
+        if environment is None:
+            # Basic agent update for compatibility with core ecosystem
+            self.age += 1
+            
+            # Apply species-specific energy decay
+            if self.species_type == SpeciesType.CARNIVORE:
+                # Carnivores suffer more when they haven't eaten recently
+                self.steps_since_fed += 1
+                if self.steps_since_fed > 40:  # After 40 steps without eating, starvation begins
+                    # Apply escalating starvation penalty
+                    starvation_multiplier = 1.0 + (self.steps_since_fed - 40) * 0.06
+                    energy_cost = self.config.carnivore_energy_cost * starvation_multiplier
+                else:
+                    energy_cost = self.config.age_energy_cost
+                self.energy -= energy_cost
+            else:
+                # Herbivores have normal energy decay
+                self.energy -= self.config.age_energy_cost
+            
+            if self.reproduction_cooldown > 0:
+                self.reproduction_cooldown -= 1
+            
+            # Check if agent dies from energy depletion
+            if self.energy <= 0:
+                self.is_alive = False
+            
             return None
         
         # Update position tracking
@@ -103,8 +142,8 @@ class EvolutionaryNeuralAgent:
         # Age and energy management
         self._age_and_energy_update()
         
-        # Update fitness based on performance
-        self._update_fitness_score()
+        # Update fitness based on performance (with advanced evaluation)
+        self._update_fitness_score(environment)
         
         return action_results
     
@@ -250,24 +289,49 @@ class EvolutionaryNeuralAgent:
         return food_consumed
     
     def _hunt_prey(self, environment) -> float:
-        """Hunt herbivore prey"""
+        """Hunt herbivore prey with improved mechanics"""
         food_consumed = 0.0
+        max_hunts_per_turn = 2  # Allow multiple hunts if very close
+        hunts_this_turn = 0
         
+        # Sort prey by distance to prioritize closest targets
+        prey_list = []
         for prey in environment.agents:
             if (prey != self and prey.is_alive and 
                 prey.species_type == SpeciesType.HERBIVORE):
                 distance = self.position.distance_to(prey.position)
-                if distance <= 1.5:  # Close enough to attack
-                    # Successful hunt
-                    energy_gain = min(40.0, prey.energy * 0.8)
-                    self.energy = min(self.max_energy, self.energy + energy_gain)
-                    food_consumed += energy_gain
-                    
-                    # Kill prey
-                    prey.is_alive = False
-                    self.prey_captures += 1
-                    
-                    break  # One prey per turn
+                if distance <= 7.0:  # Much larger hunting range
+                    prey_list.append((distance, prey))
+        
+        # Sort by distance (closest first)
+        prey_list.sort(key=lambda x: x[0])
+        
+        for distance, prey in prey_list:
+            if hunts_this_turn >= max_hunts_per_turn:
+                break
+                
+            # Calculate hunt success probability
+            energy_factor = min(0.9, self.energy / 60)  # Better when well-fed
+            distance_factor = max(0.3, 1.0 - (distance / 7.0))  # Closer = better
+            health_factor = 0.3 if prey.energy < 50 else 0.1  # Easier to hunt weak prey
+            
+            # Base success rate around 85% for healthy carnivores
+            hunt_success_chance = min(0.95, 0.75 + energy_factor * 0.15 + distance_factor * 0.15 + health_factor)
+            
+            if random.random() < hunt_success_chance:
+                # Successful hunt
+                energy_gain = min(50.0, prey.energy * 0.85)  # Better energy transfer
+                self.energy = min(self.max_energy, self.energy + energy_gain)
+                food_consumed += energy_gain
+                
+                # Reset starvation tracking
+                self.steps_since_fed = 0
+                self.last_fed_time = environment.time_step if hasattr(environment, 'time_step') else 0
+                
+                # Kill prey
+                prey.is_alive = False
+                self.prey_captures += 1
+                hunts_this_turn += 1
         
         return food_consumed
     
@@ -423,8 +487,27 @@ class EvolutionaryNeuralAgent:
         if self.age > 1500 and np.random.random() < 0.01:
             self.is_alive = False
     
-    def _update_fitness_score(self):
-        """Update fitness score based on performance"""
+    def _update_fitness_score(self, environment=None):
+        """Update fitness score using advanced fitness evaluation"""
+        if environment is not None and self.fitness_evaluator is not None:
+            # Use advanced fitness evaluator
+            fitness_components = self.fitness_evaluator.evaluate_agent_fitness(self, environment)
+            
+            # Store detailed fitness information for analysis
+            if hasattr(self, 'detailed_fitness'):
+                self.detailed_fitness = fitness_components
+            else:
+                self.detailed_fitness = fitness_components
+            
+            # Brain's fitness score is already updated by the evaluator
+            return fitness_components
+        else:
+            # Fallback to basic fitness calculation for compatibility
+            self._update_basic_fitness_score()
+            return {"total_fitness": self.brain.fitness_score}
+    
+    def _update_basic_fitness_score(self):
+        """Basic fitness calculation for backward compatibility"""
         # Base survival fitness
         survival_fitness = self.age / 10.0
         
@@ -464,10 +547,17 @@ class EvolutionaryNeuralAgent:
     
     def can_reproduce(self) -> bool:
         """Check if agent can reproduce"""
-        return (self.is_alive and 
-                self.energy >= self.config.reproduction_cost and
-                self.age >= 50 and
-                self.reproduction_cooldown <= 0)
+        base_requirements = (self.is_alive and 
+                           self.energy >= self.config.reproduction_cost and
+                           self.age >= 30 and  # Reduced age requirement
+                           self.reproduction_cooldown <= 0)
+        
+        # Additional requirement for carnivores: must have eaten recently
+        if self.species_type == SpeciesType.CARNIVORE:
+            # Carnivores cannot reproduce if they haven't eaten in 60 steps
+            return base_requirements and self.steps_since_fed < 60
+        
+        return base_requirements
     
     def get_agent_info(self) -> Dict[str, Any]:
         """Get comprehensive agent information"""
@@ -490,3 +580,66 @@ class EvolutionaryNeuralAgent:
             'communication_output': self.communication_output,
             'novelty_bonus': self.novelty_bonus
         }
+
+    def move_towards(self, target, speed_multiplier: float = 1.0):
+        """Move towards a target position (required by core ecosystem)"""
+        if self.position.distance_to(target) < 0.1:
+            return
+            
+        dx = target.x - self.position.x
+        dy = target.y - self.position.y
+        distance = math.sqrt(dx**2 + dy**2)
+        
+        if distance > 0:
+            move_speed = self.speed * speed_multiplier
+            self.position.x += (dx / distance) * move_speed
+            self.position.y += (dy / distance) * move_speed
+    
+    def move_away_from(self, threat, speed_multiplier: float = 1.5):
+        """Move away from a threatening position (required by core ecosystem)"""
+        dx = self.position.x - threat.x
+        dy = self.position.y - threat.y
+        distance = math.sqrt(dx**2 + dy**2)
+        
+        if distance > 0:
+            move_speed = self.speed * speed_multiplier
+            self.position.x += (dx / distance) * move_speed
+            self.position.y += (dy / distance) * move_speed
+    
+    def random_move(self):
+        """Move in a random direction"""
+        import random
+        angle = random.uniform(0, 2 * math.pi)
+        move_speed = self.speed * 0.5
+        self.position.x += math.cos(angle) * move_speed
+        self.position.y += math.sin(angle) * move_speed
+
+    def reproduce(self):
+        """Create offspring with evolved neural network (required by core ecosystem)"""
+        if not self.can_reproduce():
+            return None
+        
+        # Deduct reproduction cost
+        self.energy -= self.config.reproduction_cost
+        self.reproduction_cooldown = self.config.reproduction_cooldown
+        self.successful_reproductions += 1
+        
+        # Create offspring position nearby
+        import random
+        offspring_pos = Position(
+            self.position.x + random.uniform(-5, 5),
+            self.position.y + random.uniform(-5, 5)
+        )
+        
+        # Create evolved offspring (simplified for ecosystem compatibility)
+        offspring = EvolutionaryNeuralAgent(
+            species_type=self.species_type,
+            position=offspring_pos,
+            agent_id=random.randint(10000, 99999),
+            config=self.config
+        )
+        
+        # Basic neural network inheritance (simplified)
+        offspring.brain = self.brain.create_offspring()
+        
+        return offspring

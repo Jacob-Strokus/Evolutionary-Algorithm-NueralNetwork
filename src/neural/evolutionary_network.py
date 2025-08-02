@@ -34,8 +34,9 @@ class EvolutionaryNeuralNetwork:
         self.hidden_size = random.randint(config.min_hidden_size, config.max_hidden_size)
         self.has_recurrent = random.random() < config.recurrent_probability
         
-        # Initialize weights
-        self.weights_input_hidden = np.random.randn(config.min_input_size, self.hidden_size) * 0.4
+        # Initialize weights - account for memory context
+        total_input_size = config.min_input_size + config.memory_size * 2
+        self.weights_input_hidden = np.random.randn(total_input_size, self.hidden_size) * 0.4
         self.bias_hidden = np.random.randn(self.hidden_size) * 0.2
         
         self.weights_hidden_output = np.random.randn(self.hidden_size, config.output_size) * 0.4
@@ -235,7 +236,9 @@ class EvolutionaryNeuralNetwork:
         
         # Resize hidden state
         new_hidden_state = np.zeros(new_size)
-        new_hidden_state[:copy_size] = self.hidden_state[:copy_size]
+        # Ensure we don't copy more than what exists
+        actual_copy_size = min(copy_size, self.hidden_state.shape[0], new_size)
+        new_hidden_state[:actual_copy_size] = self.hidden_state[:actual_copy_size]
         self.hidden_state = new_hidden_state
     
     def crossover(self, other: 'EvolutionaryNeuralNetwork') -> 'EvolutionaryNeuralNetwork':
@@ -347,3 +350,31 @@ class EvolutionaryNeuralNetwork:
             'decisions_made': self.decisions_made,
             'fitness_score': self.fitness_score
         }
+
+    def create_offspring(self):
+        """Create an offspring network with mutation (for reproduction)"""
+        # Create a copy of this network
+        offspring = EvolutionaryNeuralNetwork(self.config)
+        
+        # Copy weights and structure
+        offspring.hidden_size = self.hidden_size
+        offspring.has_recurrent = self.has_recurrent
+        
+        # Copy weights
+        offspring.weights_input_hidden = self.weights_input_hidden.copy()
+        offspring.weights_hidden_output = self.weights_hidden_output.copy()
+        offspring.bias_hidden = self.bias_hidden.copy()
+        offspring.bias_output = self.bias_output.copy()
+        
+        if self.has_recurrent and self.weights_recurrent is not None:
+            offspring.weights_recurrent = self.weights_recurrent.copy()
+        
+        # Copy traits
+        offspring.exploration_drive = self.exploration_drive
+        offspring.social_weight = self.social_weight
+        offspring.memory_decay = self.memory_decay
+        
+        # Apply mutations to offspring
+        offspring.mutate()
+        
+        return offspring
