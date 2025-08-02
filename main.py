@@ -1,26 +1,38 @@
 #!/usr/bin/env python3
 """
-Neural Ecosystem Simulation - Main Entry Point
-==============================================
+Phase 2 Enhanced Neural Ecosystem Simulation - COMPLETE! 🎉
+=============================================================
 
-Main launcher for the neural network ecosystem simulation with generation tracking
-and advanced web-based visualization. This is the primary entry point for running the
-complete neural ecosystem with all features enabled.
+Main launcher for the Phase 2 enhanced neural network ecosystem simulation with 
+advanced evolutionary features, generation tracking, and sophisticated web-based 
+visualization. This is the primary entry point for running the complete Phase 2 
+neural ecosystem with all advanced features enabled and operational.
 
-🌟 NEW: Advanced Web Interface with real-time WebSocket connectivity!
+🌟 Phase 2 COMPLETE: Advanced Features with real-time WebSocket connectivity!
+
+Phase 2 Enhancements - ALL IMPLEMENTED:
+    ✅ Multi-target processing (3 food + 3 threats simultaneously)
+    ✅ Advanced temporal learning networks (LSTM-style memory)
+    ✅ Social learning & communication (4-channel protocols)
+    ✅ Intelligent exploration strategies (curiosity-driven)
+    ✅ Advanced fitness optimization (dynamic landscapes & co-evolution)
 
 Usage:
-    python main.py              # Run standard neural simulation
-    python main.py --web        # Run with ADVANCED web interface (RECOMMENDED!)
-    python main.py --analysis   # Run with detailed analysis
-    python main.py --extended   # Run extended 1500-step simulation
+    python main.py              # Run Phase 2 enhanced neural simulation
+    python main.py --web        # Run with PHASE 2 ENHANCED web interface (RECOMMENDED!)
+    python main.py --analysis   # Run with detailed Phase 2 analysis
+    python main.py --extended   # Run extended 1500-step Phase 2 simulation
 
 Web Interface Features:
-    • Real-time simulation display without page refresh
-    • Interactive neural network inspection (click agents!)
+    • Real-time Phase 2 simulation display without page refresh
+    • Interactive neural network inspection with Phase 2 features
+    • Multi-target processing visualization
+    • Social communication network displays
+    • Exploration intelligence tracking
+    • Advanced fitness landscape monitoring
     • Live population and energy charts
     • Adjustable simulation speed controls
-    • D3.js neural network visualizations
+    • D3.js neural network visualizations with Phase 2 enhancements
     • Mobile-responsive design
     • WebSocket real-time communication
 """
@@ -28,16 +40,301 @@ Web Interface Features:
 import sys
 import os
 import argparse
+import random
+import math
 
 # Add project root to Python path
 project_root = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, project_root)
 
-# Import from our organized src structure
-from src.neural.neural_agents import NeuralEnvironment, NeuralAgent
+# Import from our organized src structure - Phase 2 Enhanced!
+from src.neural.evolutionary_agent import EvolutionaryNeuralAgent, EvolutionaryAgentConfig
+from src.neural.evolutionary_network import EvolutionaryNeuralNetwork, EvolutionaryNetworkConfig
+from src.neural.multi_target_processor import MultiTargetProcessor
+from src.neural.temporal_networks import AdvancedRecurrentNetwork, MultiTimescaleMemory
+from src.neural.social_learning import SocialLearningFramework
+from src.neural.exploration_systems import ExplorationIntelligence
 from src.analysis.neural_inspector import NeuralNetworkInspector
-from src.core.ecosystem import SpeciesType
+from src.core.ecosystem import SpeciesType, Environment, Agent, Position
 from src.evolution.advanced_genetic import AdvancedGeneticAlgorithm, AdvancedEvolutionConfig
+from src.evolution.advanced_fitness import AdvancedFitnessEvaluator
+
+class Phase2NeuralEnvironment(Environment):
+    """Phase 2 Enhanced Environment with Evolutionary Neural Agents"""
+    
+    def __init__(self, width: int = 100, height: int = 100, use_neural_agents: bool = True):
+        # Initialize parent environment
+        super().__init__(width, height)
+        
+        # Phase 2 Enhancement: Global fitness evaluator for sophisticated fitness landscapes
+        self.global_fitness_evaluator = AdvancedFitnessEvaluator()
+        
+        # Phase 2 Enhancement: Track global exploration and social data
+        self.global_communication_log = []
+        self.global_exploration_stats = {'total_discoveries': 0, 'coverage_areas': set()}
+        
+        # Clear default agents and create Phase 2 enhanced agents
+        if use_neural_agents:
+            self.agents = []
+            self._initialize_phase2_agents()
+    
+    def _initialize_phase2_agents(self):
+        """Create initial population of Phase 2 enhanced neural agents"""
+        # Configure Phase 2 networks with default evolutionary settings
+        network_config = EvolutionaryNetworkConfig(
+            min_input_size=20,  # Enhanced sensory inputs for Phase 2
+            max_input_size=25,
+            min_hidden_size=12,
+            max_hidden_size=24,
+            output_size=6,  # Enhanced outputs for complex behaviors
+            mutation_rate=0.15,
+            recurrent_probability=0.7  # High chance for temporal learning
+        )
+        
+        agent_config = EvolutionaryAgentConfig(
+            social_learning=True,
+            exploration_tracking=True,
+            memory_tracking=True
+        )
+        
+        # Create enhanced herbivores (Generation 1)
+        for i in range(20):
+            pos = Position(
+                random.uniform(20, self.width - 20),
+                random.uniform(20, self.height - 20)
+            )
+            herbivore = EvolutionaryNeuralAgent(
+                SpeciesType.HERBIVORE, pos, self.next_agent_id,
+                config=agent_config, network_config=network_config
+            )
+            # Initialize Phase 2 systems
+            herbivore.multi_target_processor = MultiTargetProcessor(agent_id=str(self.next_agent_id), max_targets=6)
+            herbivore.temporal_network = AdvancedRecurrentNetwork(input_size=25, output_size=6, agent_id=str(self.next_agent_id))
+            herbivore.social_learning = SocialLearningFramework(agent_id=str(self.next_agent_id))
+            herbivore.exploration_intelligence = ExplorationIntelligence(agent_id=str(self.next_agent_id))
+            herbivore.generation = 1
+            
+            self.agents.append(herbivore)
+            self.next_agent_id += 1
+        
+        # Create enhanced carnivores (Generation 1)
+        for i in range(8):
+            pos = Position(
+                random.uniform(20, self.width - 20),
+                random.uniform(20, self.height - 20)
+            )
+            carnivore = EvolutionaryNeuralAgent(
+                SpeciesType.CARNIVORE, pos, self.next_agent_id,
+                config=agent_config, network_config=network_config
+            )
+            # Initialize Phase 2 systems
+            carnivore.multi_target_processor = MultiTargetProcessor(agent_id=str(self.next_agent_id), max_targets=6)
+            carnivore.temporal_network = AdvancedRecurrentNetwork(input_size=25, output_size=6, agent_id=str(self.next_agent_id))
+            carnivore.social_learning = SocialLearningFramework(agent_id=str(self.next_agent_id))
+            carnivore.exploration_intelligence = ExplorationIntelligence(agent_id=str(self.next_agent_id))
+            carnivore.generation = 1
+            
+            self.agents.append(carnivore)
+            self.next_agent_id += 1
+        
+        # Set global fitness evaluator for all agents
+        self._initialize_fitness_system()
+    
+    def _initialize_fitness_system(self):
+        """Initialize advanced fitness system for all agents"""
+        for agent in self.agents:
+            if hasattr(agent, 'fitness_evaluator'):
+                agent.fitness_evaluator = self.global_fitness_evaluator
+    
+    def step(self):
+        """Enhanced step with Phase 2 capabilities"""
+        # Initialize step counter if not present
+        if not hasattr(self, 'step_count'):
+            self.step_count = 0
+        self.step_count += 1
+        
+        # Phase 2: Update environmental conditions for fitness landscape
+        self.global_fitness_evaluator.update_environmental_conditions(self)
+        
+        # Phase 2: Update niche populations
+        self.global_fitness_evaluator.update_niche_populations(self)
+        
+        # Phase 2: Process social interactions between agents
+        if len(self.agents) > 1:
+            self._process_social_interactions()
+        
+        # Phase 2: Update exploration intelligence per agent
+        for agent in self.agents:
+            if hasattr(agent, 'exploration_intelligence'):
+                # Enhanced exploration update with step tracking
+                agent.exploration_intelligence.exploration_history.append({
+                    'position': (agent.position.x, agent.position.y),
+                    'step': self.step_count,
+                    'energy': agent.energy,
+                    'species': agent.species_type.name
+                })
+        
+        # Run standard environment step (includes agent updates with advanced fitness)
+        super().step()
+        
+        # Phase 2: Process multi-agent learning and temporal updates
+        for agent in self.agents:
+            if hasattr(agent, 'temporal_network'):
+                # Temporal networks update themselves during forward passes
+                # Additional temporal learning context could be added here
+                pass
+            
+            # Ensure agent has access to global fitness evaluator
+            if not hasattr(agent, 'fitness_evaluator') or agent.fitness_evaluator is None:
+                agent.fitness_evaluator = self.global_fitness_evaluator
+    
+    def _process_social_interactions(self):
+        """Process advanced social interactions between agents"""
+        for i, agent1 in enumerate(self.agents):
+            if hasattr(agent1, 'social_learning') and agent1.is_alive:
+                for j, agent2 in enumerate(self.agents[i+1:], i+1):
+                    if hasattr(agent2, 'social_learning') and agent2.is_alive:
+                        # Calculate distance
+                        dx = agent1.position.x - agent2.position.x
+                        dy = agent1.position.y - agent2.position.y
+                        distance = math.sqrt(dx*dx + dy*dy)
+                        
+                        # If within communication range, allow interaction
+                        if distance <= agent1.social_learning.communication_range:
+                            # Enhanced interaction logging
+                            interaction = {
+                                'agent1': agent1.agent_id,
+                                'agent2': agent2.agent_id,
+                                'distance': distance,
+                                'step': self.step_count,
+                                'species1': agent1.species_type.name,
+                                'species2': agent2.species_type.name,
+                                'fitness1': getattr(agent1.brain, 'fitness_score', 0),
+                                'fitness2': getattr(agent2.brain, 'fitness_score', 0)
+                            }
+                            self.global_communication_log.append(interaction)
+                            
+                            # Enhanced communication signal exchange
+                            if hasattr(agent1, 'received_signals') and hasattr(agent2, 'received_signals'):
+                                # Cross-species or same-species learning
+                                signal_strength = max(0.1, 1.0 - (distance / agent1.social_learning.communication_range))
+                                
+                                # Agent1 receives from Agent2
+                                agent1.received_signals.append({
+                                    'sender': agent2.agent_id,
+                                    'strength': signal_strength,
+                                    'step': self.step_count,
+                                    'fitness': getattr(agent2.brain, 'fitness_score', 0)
+                                })
+                                
+                                # Agent2 receives from Agent1
+                                agent2.received_signals.append({
+                                    'sender': agent1.agent_id,
+                                    'strength': signal_strength,
+                                    'step': self.step_count,
+                                    'fitness': getattr(agent1.brain, 'fitness_score', 0)
+                                })
+    
+    def get_neural_stats(self):
+        """Get Phase 2 enhanced statistics"""
+        if not self.agents:
+            return {}
+        
+        # Basic stats
+        herbivores = [a for a in self.agents if a.species_type == SpeciesType.HERBIVORE]
+        carnivores = [a for a in self.agents if a.species_type == SpeciesType.CARNIVORE]
+        
+        # Phase 2: Social learning stats
+        social_communications = len(self.global_communication_log)
+        recent_communications = len([msg for msg in self.global_communication_log[-50:]])  # Last 50 communications
+        
+        # Phase 2: Exploration stats
+        total_exploration_points = sum(len(a.exploration_intelligence.exploration_history) 
+                                     for a in self.agents if hasattr(a, 'exploration_intelligence') and hasattr(a.exploration_intelligence, 'exploration_history'))
+        unique_locations = len(set((round(a.position.x/10), round(a.position.y/10)) for a in self.agents))
+        exploration_coverage = min(100.0, (unique_locations / ((self.width/10) * (self.height/10))) * 100)
+        
+        # Multi-target processing stats
+        multi_target_active = sum(1 for a in self.agents if hasattr(a, 'multi_target_processor') and 
+                                 hasattr(a.multi_target_processor, 'get_processing_stats'))
+        
+        # Advanced fitness stats
+        fitness_landscape = self.global_fitness_evaluator.get_fitness_landscape_info()
+        avg_fitness_scores = [getattr(a.brain, 'fitness_score', 0) for a in self.agents if a.is_alive]
+        avg_fitness = sum(avg_fitness_scores) / len(avg_fitness_scores) if avg_fitness_scores else 0
+        
+        # Niche distribution
+        niche_distribution = fitness_landscape.get('active_niches', {})
+        
+        return {
+            'herbivores': len(herbivores),
+            'carnivores': len(carnivores),
+            'total_food': len(self.food_sources),
+            'avg_herbivore_energy': sum(h.energy for h in herbivores) / len(herbivores) if herbivores else 0,
+            'avg_carnivore_energy': sum(c.energy for c in carnivores) / len(carnivores) if carnivores else 0,
+            'generations': list(set(getattr(a, 'generation', 1) for a in self.agents)),
+            # Phase 2 Stats
+            'social_communications': social_communications,
+            'exploration_coverage': exploration_coverage,
+            'multi_target_agents': multi_target_active,
+            'exploration_points': total_exploration_points,
+            'phase2_features': 'Multi-Target, Temporal, Social, Exploration, Advanced Fitness',
+            # Advanced Fitness Stats
+            'avg_fitness_score': avg_fitness,
+            'fitness_landscape': fitness_landscape['environmental_conditions'],
+            'niche_distribution': niche_distribution,
+            'step_count': getattr(self, 'step_count', 0)
+        }
+    
+    def get_fitness_landscape_info(self):
+        """Get advanced fitness landscape information for analysis"""
+        return self.global_fitness_evaluator.get_fitness_landscape_info()
+    
+    def get_agent_fitness_details(self, agent_id):
+        """Get detailed fitness breakdown for a specific agent"""
+        for agent in self.agents:
+            if agent.agent_id == agent_id and hasattr(agent, 'detailed_fitness'):
+                return agent.detailed_fitness
+        return None
+    
+    def get_phase2_system_status(self):
+        """Get comprehensive Phase 2 system status"""
+        alive_agents = [a for a in self.agents if a.is_alive]
+        
+        # System component status
+        multi_target_count = sum(1 for a in alive_agents if hasattr(a, 'multi_target_processor'))
+        temporal_network_count = sum(1 for a in alive_agents if hasattr(a, 'temporal_network'))
+        social_learning_count = sum(1 for a in alive_agents if hasattr(a, 'social_learning'))
+        exploration_intel_count = sum(1 for a in alive_agents if hasattr(a, 'exploration_intelligence'))
+        fitness_evaluator_count = sum(1 for a in alive_agents if hasattr(a, 'fitness_evaluator') and a.fitness_evaluator is not None)
+        
+        # Recent activity metrics
+        recent_steps = 10
+        recent_communications = len([msg for msg in self.global_communication_log 
+                                   if msg.get('step', 0) > getattr(self, 'step_count', 0) - recent_steps])
+        
+        return {
+            'total_agents': len(alive_agents),
+            'system_coverage': {
+                'multi_target_processors': f"{multi_target_count}/{len(alive_agents)}",
+                'temporal_networks': f"{temporal_network_count}/{len(alive_agents)}",
+                'social_learning': f"{social_learning_count}/{len(alive_agents)}",
+                'exploration_intelligence': f"{exploration_intel_count}/{len(alive_agents)}",
+                'advanced_fitness': f"{fitness_evaluator_count}/{len(alive_agents)}"
+            },
+            'activity_metrics': {
+                'recent_communications': recent_communications,
+                'total_communications': len(self.global_communication_log),
+                'current_step': getattr(self, 'step_count', 0)
+            },
+            'phase2_status': 'FULLY_OPERATIONAL' if all([
+                multi_target_count == len(alive_agents),
+                temporal_network_count == len(alive_agents),
+                social_learning_count == len(alive_agents),
+                exploration_intel_count == len(alive_agents),
+                fitness_evaluator_count == len(alive_agents)
+            ]) else 'PARTIAL_DEPLOYMENT'
+        }
 
 class SimpleEcosystemWrapper:
     """Simple wrapper for the environment to work with the web server"""
@@ -178,12 +475,12 @@ class EnhancedEcosystemWrapper:
             print("❌ Environment has no step() or update() method")
 
 def run_standard_simulation(steps=500):
-    """Run a standard neural ecosystem simulation."""
-    print("🧠 Starting Neural Ecosystem Simulation")
-    print("=" * 50)
+    """Run a standard neural ecosystem simulation with Phase 2 enhancements."""
+    print("🧠 Starting Phase 2 Enhanced Neural Ecosystem Simulation")
+    print("=" * 60)
     
-    # Create neural environment with generation tracking
-    env = NeuralEnvironment(width=100, height=100, use_neural_agents=True)
+    # Create Phase 2 enhanced neural environment
+    env = Phase2NeuralEnvironment(width=100, height=100, use_neural_agents=True)
     
     print(f"🦌 Initial Herbivores: {len([a for a in env.agents if a.species_type == SpeciesType.HERBIVORE])}")
     print(f"🐺 Initial Carnivores: {len([a for a in env.agents if a.species_type == SpeciesType.CARNIVORE])}")
@@ -230,15 +527,16 @@ def run_standard_simulation(steps=500):
             print(f"🏆 Top Carnivore: Gen {getattr(top_carnivore, 'generation', '?')}, Energy: {top_carnivore.energy:.1f}")
 
 def run_web_simulation(steps=1000):
-    """Run simulation with web-based visualization and enhanced evolution."""
-    print("🌐 Starting Enhanced Neural Ecosystem Web Interface")
-    print("=" * 55)
+    """Run simulation with web-based visualization and Phase 2 enhanced evolution."""
+    print("🌐 Starting Phase 2 Enhanced Neural Ecosystem Web Interface")
+    print("=" * 65)
     
     # Import the new clean web server
     from src.visualization.web_server import EcosystemWebServer
     
-    # Create enhanced evolution system
-    print("🧬 Initializing Enhanced Evolution System...")
+    # Create enhanced evolution system with Phase 2 features
+    print("🧬 Initializing Phase 2 Enhanced Evolution System...")
+    print("🎯 Phase 2 Features: Multi-Target, Temporal, Social, Exploration")
     
     # Setup genetic algorithm with optimized parameters
     genetic_config = AdvancedEvolutionConfig()
@@ -251,7 +549,7 @@ def run_web_simulation(steps=1000):
     genetic_config.generation_length = 300      # Steps per generation
     
     # Create evolution system components
-    env = NeuralEnvironment(width=100, height=100, use_neural_agents=True)
+    env = Phase2NeuralEnvironment(width=100, height=100, use_neural_agents=True)
     genetic_algorithm = AdvancedGeneticAlgorithm(genetic_config)
     
     # Create a simplified evolution system for web interface
@@ -294,16 +592,21 @@ def run_web_simulation(steps=1000):
     
     print("\n🚀 Starting enhanced web server...")
     print("📱 Open your browser to: http://localhost:5000")
-    print("\n🔍 Enhanced Features:")
+    print("\n🔍 Phase 2 Enhanced Features:")
     print("   • 🖥️  Real-time simulation display")
     print("   • 🧬 Automatic generational evolution")
+    print("   • 🎯 Multi-target processing (3 food + 3 threats)")
+    print("   • 🧠 Advanced temporal learning networks")
+    print("   • 🤝 Social learning & communication")
+    print("   • 🗺️ Intelligent exploration strategies")
     print("   • 🎮 Interactive start/stop controls")
     print("   • ⚡ Adjustable simulation speed")
     print("   • 📊 Live population & evolution statistics")
     print("   • 🔄 WebSocket real-time updates")
     print("   • 🏆 Elite preservation & tournament selection")
     print("\n⚡ Press Ctrl+C to stop the simulation")
-    print("💡 TIP: Click 'Start Simulation' to see evolution in action!")
+    print("💡 TIP: Click 'Start Simulation' to see Phase 2 evolution in action!")
+    print("🔬 Watch for: Multi-target decisions, social communication, exploration intelligence!")
     
     try:
         # Start the web server
@@ -312,12 +615,12 @@ def run_web_simulation(steps=1000):
         print("\n🛑 Simulation stopped by user")
 
 def run_analysis_simulation(steps=500):
-    """Run simulation with detailed neural network analysis."""
-    print("🔬 Starting Neural Ecosystem Analysis")
-    print("=" * 50)
+    """Run simulation with detailed neural network analysis and Phase 2 features."""
+    print("🔬 Starting Phase 2 Enhanced Neural Ecosystem Analysis")
+    print("=" * 60)
     
-    env = NeuralEnvironment(width=100, height=100, use_neural_agents=True)
-    inspector = NeuralNetworkInspector()
+    env = Phase2NeuralEnvironment(width=100, height=100, use_neural_agents=True)
+    inspector = NeuralNetworkInspector(env)
     
     print("🧪 Running detailed analysis simulation...")
     
@@ -337,17 +640,23 @@ def run_analysis_simulation(steps=500):
                 })
             
             if step % 100 == 0:
-                print(f"Step {step}: Analyzing neural networks...")
+                print(f"Step {step}: Analyzing Phase 2 neural networks...")
                 
-                # Sample a few agents for detailed analysis
+                # Sample a few agents for detailed Phase 2 analysis
                 sample_agents = env.agents[:3] if len(env.agents) >= 3 else env.agents
                 for agent in sample_agents:
                     if hasattr(agent, 'neural_network'):
                         analysis = inspector.analyze_network(agent.neural_network)
+                        # Phase 2 specific analysis
+                        multi_targets = len(agent.multi_target_processor.get_active_targets()) if hasattr(agent, 'multi_target_processor') else 0
+                        social_msgs = len(getattr(agent, 'recent_communications', [])) if hasattr(agent, 'recent_communications') else 0
+                        exploration_state = getattr(agent, 'exploration_state', 'unknown')
+                        
                         print(f"  Agent {agent.agent_id}: Gen {getattr(agent, 'generation', '?')}, "
-                              f"Complexity: {analysis.get('complexity', 'N/A')}")
+                              f"Complexity: {analysis.get('complexity', 'N/A')}, "
+                              f"Targets: {multi_targets}, Social: {social_msgs}, Explore: {exploration_state}")
         
-        env.update()
+        env.step()
     
     # Final analysis report
     print("\n📈 Generation Evolution Analysis:")

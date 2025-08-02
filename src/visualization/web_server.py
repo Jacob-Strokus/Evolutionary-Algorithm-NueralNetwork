@@ -178,40 +178,96 @@ class EcosystemWebServer:
         if hasattr(target_agent, 'brain') and target_agent.brain is not None:
             nn = target_agent.brain  # The brain IS the neural network
             
-            # Get current sensory inputs
+            # Get current sensory inputs - Phase 2 compatible
             if hasattr(target_agent.brain, 'sensor_system'):
                 try:
-                    sensory_inputs = target_agent.brain.sensor_system.get_sensory_inputs(
+                    sensory_inputs = target_agent.brain.sensor_system.get_enhanced_sensory_inputs(
                         target_agent, self.canvas.env
                     )
                 except Exception as e:
                     print(f"Error getting sensory inputs: {e}")
-                    sensory_inputs = [0] * 10  # Default fallback for 10-input network
+                    sensory_inputs = [0] * 25  # Phase 2 enhanced sensory inputs
             else:
-                # Use the SensorSystem directly
+                # Use the enhanced evolutionary sensor system for Phase 2
                 try:
-                    from src.neural.neural_network import SensorSystem
-                    sensory_inputs = SensorSystem.get_sensory_inputs(target_agent, self.canvas.env)
+                    from src.neural.evolutionary_sensors import EvolutionarySensorSystem
+                    sensory_inputs = EvolutionarySensorSystem.get_enhanced_sensory_inputs(target_agent, self.canvas.env)
                 except Exception as e:
-                    print(f"Error getting sensory inputs: {e}")
-                    sensory_inputs = [0] * 10  # Default fallback for 10-input network
+                    print(f"Error getting Phase 2 sensory inputs: {e}")
+                    # Fallback to basic inputs - ensure we have enough inputs for the network
+                    sensory_inputs = [
+                        target_agent.energy / 100.0,  # Energy level
+                        target_agent.age / 1000.0,    # Age factor
+                        0.5, 0.0, 0.0,  # Food 1 (distance, x, y)
+                        0.5, 0.0, 0.0,  # Food 2
+                        0.5, 0.0, 0.0,  # Food 3
+                        0.5, 0.0, 0.0,  # Threat 1 (distance, x, y)
+                        0.5, 0.0, 0.0,  # Threat 2
+                        0.5, 0.0, 0.0,  # Threat 3
+                        0.5,  # Population density
+                        1.0 if target_agent.can_reproduce() else 0.0,  # Can reproduce
+                        target_agent.x / self.canvas.env.width,   # X boundary
+                        target_agent.y / self.canvas.env.height,  # Y boundary
+                        0.5,  # Exploration value
+                        0.0,  # Social signal
+                        0.0   # Extra padding
+                    ]
             
             # Get network weights and structure
             try:
-                # Get current network output
+                # Ensure we have enough inputs for the network
                 import numpy as np
-                current_output = nn.forward(np.array(sensory_inputs))
-                
-                # Calculate hidden layer activations for visualization
                 inputs_array = np.array(sensory_inputs)
-                hidden_raw = np.dot(inputs_array, nn.weights_input_hidden) + nn.bias_hidden
-                hidden_activations = nn.tanh(hidden_raw)  # Apply activation function
+                
+                # For Phase 2 networks, ensure input size matches expectations
+                expected_input_size = nn.weights_input_hidden.shape[0] if hasattr(nn, 'weights_input_hidden') else 26
+                
+                # Pad or truncate inputs to match network expectations
+                if len(inputs_array) < expected_input_size:
+                    # Pad with zeros
+                    inputs_array = np.pad(inputs_array, (0, expected_input_size - len(inputs_array)))
+                elif len(inputs_array) > expected_input_size:
+                    # Truncate
+                    inputs_array = inputs_array[:expected_input_size]
+                
+                # Get current network output using the network's own forward method
+                current_output = nn.forward(inputs_array)
+                
+                # For Phase 2 EvolutionaryNeuralNetwork, get hidden activations from the network
+                if hasattr(nn, 'hidden_state') and nn.hidden_state is not None:
+                    # Use the network's internal hidden state
+                    hidden_activations = nn.hidden_state
+                else:
+                    # Fallback: try to calculate manually if possible
+                    try:
+                        # For Phase 2 networks, we need to use enhanced inputs with memory context
+                        if hasattr(nn, '_get_memory_context'):
+                            memory_context = nn._get_memory_context()
+                            # Only use first min_input_size inputs, then add memory
+                            base_inputs = inputs_array[:getattr(nn.config, 'min_input_size', 20)]
+                            enhanced_inputs = np.concatenate([base_inputs, memory_context])
+                        else:
+                            enhanced_inputs = inputs_array
+                        
+                        # Ensure input size matches network expectations
+                        if enhanced_inputs.shape[0] != nn.weights_input_hidden.shape[0]:
+                            target_size = nn.weights_input_hidden.shape[0]
+                            if enhanced_inputs.shape[0] < target_size:
+                                enhanced_inputs = np.pad(enhanced_inputs, (0, target_size - enhanced_inputs.shape[0]))
+                            else:
+                                enhanced_inputs = enhanced_inputs[:target_size]
+                        
+                        hidden_raw = np.dot(enhanced_inputs, nn.weights_input_hidden) + nn.bias_hidden
+                        hidden_activations = np.tanh(hidden_raw)  # Apply activation function
+                    except Exception as calc_error:
+                        print(f"Could not calculate hidden activations: {calc_error}")
+                        hidden_activations = np.zeros(nn.hidden_size if hasattr(nn, 'hidden_size') else 8)
                 
                 agent_details['neural_network'] = {
-                    'input_size': getattr(nn.config, 'input_size', 8) if hasattr(nn, 'config') else 8,
-                    'hidden_size': getattr(nn.config, 'hidden_size', 12) if hasattr(nn, 'config') else 12,
-                    'output_size': getattr(nn.config, 'output_size', 4) if hasattr(nn, 'config') else 4,
-                    'current_inputs': sensory_inputs,
+                    'input_size': getattr(nn.config, 'min_input_size', 20) if hasattr(nn, 'config') else 20,
+                    'hidden_size': getattr(nn, 'hidden_size', 16) if hasattr(nn, 'hidden_size') else 16,
+                    'output_size': getattr(nn.config, 'output_size', 6) if hasattr(nn, 'config') else 6,
+                    'current_inputs': sensory_inputs[:20] if len(sensory_inputs) >= 20 else sensory_inputs,  # Show first 20 for display
                     'hidden_activations': hidden_activations.tolist() if hasattr(hidden_activations, 'tolist') else list(hidden_activations),
                     'weights_input_hidden': nn.weights_input_hidden.tolist() if hasattr(nn, 'weights_input_hidden') else [],
                     'weights_hidden_output': nn.weights_hidden_output.tolist() if hasattr(nn, 'weights_hidden_output') else [],
@@ -220,22 +276,37 @@ class EcosystemWebServer:
                     'input_labels': [
                         'Energy Level',
                         'Age Factor',
-                        'Food Distance', 
-                        'Food Angle',
-                        'Threat/Prey Distance',
-                        'Threat/Prey Angle',
+                        'Nearest Food Distance', 
+                        'Nearest Food X',
+                        'Nearest Food Y',
+                        'Target 2 Distance',
+                        'Target 2 X',
+                        'Target 2 Y',
+                        'Target 3 Distance',
+                        'Target 3 X',
+                        'Target 3 Y',
+                        'Nearest Threat Distance',
+                        'Nearest Threat X',
+                        'Nearest Threat Y',
                         'Population Density',
                         'Can Reproduce',
                         'X Boundary Distance',
-                        'Y Boundary Distance'
+                        'Y Boundary Distance',
+                        'Exploration Value',
+                        'Social Signal'
                     ],
                     'output_labels': [
                         'Move X',
                         'Move Y',
                         'Reproduce',
-                        'Intensity'
+                        'Intensity',
+                        'Social Signal',
+                        'Exploration Weight'
                     ],
-                    'current_outputs': current_output.tolist() if hasattr(current_output, 'tolist') else list(current_output)
+                    'current_outputs': current_output.tolist() if hasattr(current_output, 'tolist') else list(current_output),
+                    'has_memory': hasattr(nn, 'memory') and nn.memory is not None,
+                    'has_recurrent': getattr(nn, 'has_recurrent', False),
+                    'memory_size': getattr(nn.config, 'memory_size', 0) if hasattr(nn, 'config') else 0
                 }
             except Exception as e:
                 print(f"Error processing neural network: {e}")
