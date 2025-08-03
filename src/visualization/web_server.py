@@ -978,15 +978,40 @@ class EcosystemWebServer:
             
             if (agentData.neural_network && agentData.neural_network !== null) {
                 const nn = agentData.neural_network;
-                updateFieldWithHighlight('network-size', `${nn.input_size}→${nn.hidden_size}→${nn.output_size}`);
                 
-                // Update neural inputs and outputs with real-time data
-                updateNeuralInputs(nn);
-                updateNeuralOutputs(nn);
-                drawNeuralNetwork(nn);
+                // VALIDATE NETWORK COMPLETENESS - Fix for neural visualization bug
+                const isNetworkComplete = (
+                    nn.weights_input_hidden && 
+                    nn.weights_hidden_output && 
+                    nn.current_inputs && 
+                    nn.current_outputs &&
+                    nn.input_size > 0 &&
+                    nn.hidden_size > 0 &&
+                    nn.output_size > 0
+                );
                 
-                // Show neural network sections
-                document.querySelector('.neural-network-container').style.display = 'block';
+                if (!isNetworkComplete) {
+                    console.warn("Incomplete neural network data for agent", agentData.id);
+                    document.querySelector('.neural-network-container').style.display = 'none';
+                    addLog(`⚠️ Agent ${agentData.id} has incomplete neural network data`);
+                    return;
+                }
+                
+                try {
+                    updateFieldWithHighlight('network-size', `${nn.input_size}→${nn.hidden_size}→${nn.output_size}`);
+                    
+                    // Update neural inputs and outputs with real-time data
+                    updateNeuralInputs(nn);
+                    updateNeuralOutputs(nn);
+                    drawNeuralNetwork(nn);
+                    
+                    // Show neural network sections
+                    document.querySelector('.neural-network-container').style.display = 'block';
+                } catch (error) {
+                    console.error('Error updating neural network visualization:', error);
+                    document.querySelector('.neural-network-container').style.display = 'none';
+                    addLog(`❌ Failed to visualize agent ${agentData.id}: ${error.message}`);
+                }
             } else {
                 document.getElementById('network-size').textContent = 'No neural network data';
                 document.querySelector('.neural-network-container').style.display = 'none';
@@ -1075,17 +1100,83 @@ class EcosystemWebServer:
             const height = 400;
             svg.attr('width', width).attr('height', height);
             
-            // Check if we have the necessary data
-            if (!nn.weights_input_hidden || !nn.weights_hidden_output || 
-                nn.weights_input_hidden.length === 0 || nn.weights_hidden_output.length === 0) {
+            function showError(message) {
                 svg.append('text')
                     .attr('x', width / 2)
                     .attr('y', height / 2)
                     .attr('text-anchor', 'middle')
                     .attr('font-size', '16px')
                     .attr('fill', '#666')
-                    .text('Neural network weights not available');
+                    .text(message);
+                console.warn('Neural visualization error:', message);
+            }
+            
+            // ENHANCED VALIDATION - Fix for neural network visualization bug
+            if (!nn) {
+                showError("No neural network data provided");
                 return;
+            }
+            
+            if (!nn.weights_input_hidden || !Array.isArray(nn.weights_input_hidden) || 
+                nn.weights_input_hidden.length === 0) {
+                showError("Input weights not available");
+                return;
+            }
+            
+            if (!nn.weights_hidden_output || !Array.isArray(nn.weights_hidden_output) || 
+                nn.weights_hidden_output.length === 0) {
+                showError("Output weights not available");
+                return;
+            }
+            
+            if (!nn.current_inputs || !Array.isArray(nn.current_inputs)) {
+                showError("Input values not available");
+                return;
+            }
+            
+            if (!nn.current_outputs || !Array.isArray(nn.current_outputs)) {
+                showError("Output values not available");
+                return;
+            }
+            
+            // Check for NaN or invalid values in neural network data
+            function hasInvalidValues(arr) {
+                if (!Array.isArray(arr)) return true;
+                return arr.some(item => {
+                    if (Array.isArray(item)) {
+                        return hasInvalidValues(item);
+                    }
+                    return typeof item !== 'number' || isNaN(item) || !isFinite(item);
+                });
+            }
+            
+            if (hasInvalidValues(nn.weights_input_hidden)) {
+                showError("Invalid values detected in input weights (NaN/Infinity)");
+                return;
+            }
+            
+            if (hasInvalidValues(nn.weights_hidden_output)) {
+                showError("Invalid values detected in output weights (NaN/Infinity)");
+                return;
+            }
+            
+            if (hasInvalidValues(nn.current_inputs)) {
+                showError("Invalid values detected in input data (NaN/Infinity)");
+                return;
+            }
+            
+            if (hasInvalidValues(nn.current_outputs)) {
+                showError("Invalid values detected in output data (NaN/Infinity)");
+                return;
+            }
+            
+            // Fallback for missing hidden activations
+            if (!nn.hidden_activations || !Array.isArray(nn.hidden_activations)) {
+                console.warn("Hidden activations not available, using fallback");
+                nn.hidden_activations = new Array(nn.hidden_size || 16).fill(0);
+            } else if (hasInvalidValues(nn.hidden_activations)) {
+                console.warn("Invalid hidden activations detected, using fallback");
+                nn.hidden_activations = new Array(nn.hidden_size || 16).fill(0);
             }
             
             // Layer positions
@@ -1127,11 +1218,23 @@ class EcosystemWebServer:
                 });
             }
             
-            // Draw connections (input to hidden) with activation-based opacity
+            // Draw connections (input to hidden) with enhanced bounds checking
             for (let i = 0; i < inputNodes.length && i < nn.weights_input_hidden.length; i++) {
+                // Check if weight row exists and is valid
+                if (!nn.weights_input_hidden[i] || !Array.isArray(nn.weights_input_hidden[i])) {
+                    console.warn(`Skipping invalid weight row ${i}`);
+                    continue;
+                }
+                
                 for (let j = 0; j < hiddenNodes.length && j < nn.weights_input_hidden[i].length; j++) {
                     const weight = nn.weights_input_hidden[i][j];
-                    const inputActivation = Math.abs(inputNodes[i].value);
+                    
+                    // Validate weight value
+                    if (typeof weight !== 'number' || isNaN(weight)) {
+                        continue; // Skip invalid weights
+                    }
+                    
+                    const inputActivation = Math.abs(inputNodes[i].value || 0);
                     const connectionStrength = Math.abs(weight) * inputActivation;
                     
                     svg.append('line')
@@ -1145,11 +1248,23 @@ class EcosystemWebServer:
                 }
             }
             
-            // Draw connections (hidden to output) with activation-based opacity
+            // Draw connections (hidden to output) with enhanced bounds checking
             for (let i = 0; i < hiddenNodes.length && i < nn.weights_hidden_output.length; i++) {
+                // Check if weight row exists and is valid
+                if (!nn.weights_hidden_output[i] || !Array.isArray(nn.weights_hidden_output[i])) {
+                    console.warn(`Skipping invalid output weight row ${i}`);
+                    continue;
+                }
+                
                 for (let j = 0; j < outputNodes.length && j < nn.weights_hidden_output[i].length; j++) {
                     const weight = nn.weights_hidden_output[i][j];
-                    const hiddenActivation = Math.abs(hiddenNodes[i].value);
+                    
+                    // Validate weight value
+                    if (typeof weight !== 'number' || isNaN(weight)) {
+                        continue; // Skip invalid weights
+                    }
+                    
+                    const hiddenActivation = Math.abs(hiddenNodes[i].value || 0);
                     const connectionStrength = Math.abs(weight) * hiddenActivation;
                     
                     svg.append('line')
