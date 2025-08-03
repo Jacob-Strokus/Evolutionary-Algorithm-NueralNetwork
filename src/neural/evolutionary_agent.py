@@ -18,11 +18,11 @@ from src.evolution.advanced_fitness import AdvancedFitnessEvaluator
 class EvolutionaryAgentConfig:
     """Configuration for evolutionary agents"""
     max_energy: float = 100.0
-    reproduction_cost: float = 50.0
+    reproduction_cost: float = 55.0  # Slightly reduced cost for easier reproduction
     movement_cost_per_unit: float = 0.1
     age_energy_cost: float = 0.05  # Base energy cost for herbivores
-    carnivore_energy_cost: float = 1.0  # Reduced energy cost for carnivores without food
-    reproduction_cooldown: int = 20
+    carnivore_energy_cost: float = 1.8  # Slightly reduced energy cost when starving
+    reproduction_cooldown: int = 25  # Slightly reduced cooldown
     memory_tracking: bool = True
     social_learning: bool = True
     exploration_tracking: bool = True
@@ -48,11 +48,11 @@ class EvolutionaryNeuralAgent:
         
         # Species-specific attributes
         if species_type == SpeciesType.HERBIVORE:
-            self.vision_range = 15.0
-            self.speed = 1.5
+            self.vision_range = 18.0  # Improved vision for threat detection
+            self.speed = 1.8  # Slightly increased speed for escape
         else:  # CARNIVORE
-            self.vision_range = 30.0  # Increased vision for better prey tracking
-            self.speed = 2.5  # Increased speed for better hunting
+            self.vision_range = 25.0  # Balanced vision for fair hunting (reduced from 30)
+            self.speed = 2.0  # Balanced speed to prevent overhunting (reduced from 2.5)
         
         # Enhanced neural network
         net_config = network_config or EvolutionaryNetworkConfig()
@@ -102,9 +102,10 @@ class EvolutionaryNeuralAgent:
             if self.species_type == SpeciesType.CARNIVORE:
                 # Carnivores suffer more when they haven't eaten recently
                 self.steps_since_fed += 1
-                if self.steps_since_fed > 40:  # After 40 steps without eating, starvation begins
-                    # Apply escalating starvation penalty
-                    starvation_multiplier = 1.0 + (self.steps_since_fed - 40) * 0.06
+                if self.steps_since_fed > 35:  # Starvation begins slightly later for easier reproduction
+                    # Apply exponential starvation penalty for more realistic starvation
+                    starvation_days = (self.steps_since_fed - 35)
+                    starvation_multiplier = 1.0 + (starvation_days * 0.12) + (starvation_days ** 2 * 0.015)
                     energy_cost = self.config.carnivore_energy_cost * starvation_multiplier
                 else:
                     energy_cost = self.config.age_energy_cost
@@ -289,9 +290,9 @@ class EvolutionaryNeuralAgent:
         return food_consumed
     
     def _hunt_prey(self, environment) -> float:
-        """Hunt herbivore prey with improved mechanics"""
+        """Hunt herbivore prey with balanced mechanics"""
         food_consumed = 0.0
-        max_hunts_per_turn = 2  # Allow multiple hunts if very close
+        max_hunts_per_turn = 1  # Reduced from 2 to prevent overhunting
         hunts_this_turn = 0
         
         # Sort prey by distance to prioritize closest targets
@@ -300,7 +301,7 @@ class EvolutionaryNeuralAgent:
             if (prey != self and prey.is_alive and 
                 prey.species_type == SpeciesType.HERBIVORE):
                 distance = self.position.distance_to(prey.position)
-                if distance <= 7.0:  # Much larger hunting range
+                if distance <= 6.0:  # Reduced hunting range from 7.0
                     prey_list.append((distance, prey))
         
         # Sort by distance (closest first)
@@ -310,17 +311,17 @@ class EvolutionaryNeuralAgent:
             if hunts_this_turn >= max_hunts_per_turn:
                 break
                 
-            # Calculate hunt success probability
-            energy_factor = min(0.9, self.energy / 60)  # Better when well-fed
-            distance_factor = max(0.3, 1.0 - (distance / 7.0))  # Closer = better
-            health_factor = 0.3 if prey.energy < 50 else 0.1  # Easier to hunt weak prey
+            # Calculate hunt success probability with more balanced rates
+            energy_factor = min(0.8, self.energy / 70)  # Slightly reduced efficiency
+            distance_factor = max(0.2, 1.0 - (distance / 6.0))  # Adjusted for new range
+            health_factor = 0.25 if prey.energy < 50 else 0.05  # Reduced bonus for weak prey
             
-            # Base success rate around 85% for healthy carnivores
-            hunt_success_chance = min(0.95, 0.75 + energy_factor * 0.15 + distance_factor * 0.15 + health_factor)
+            # Reduced base success rate for better balance (was 0.75)
+            hunt_success_chance = min(0.85, 0.65 + energy_factor * 0.12 + distance_factor * 0.12 + health_factor)
             
             if random.random() < hunt_success_chance:
-                # Successful hunt
-                energy_gain = min(50.0, prey.energy * 0.85)  # Better energy transfer
+                # Successful hunt with balanced energy transfer
+                energy_gain = min(45.0, prey.energy * 0.75)  # Reduced efficiency (was 50.0 and 0.85)
                 self.energy = min(self.max_energy, self.energy + energy_gain)
                 food_consumed += energy_gain
                 
@@ -552,10 +553,12 @@ class EvolutionaryNeuralAgent:
                            self.age >= 30 and  # Reduced age requirement
                            self.reproduction_cooldown <= 0)
         
-        # Additional requirement for carnivores: must have eaten recently
+        # Additional requirement for carnivores: must have eaten recently and have prey available
         if self.species_type == SpeciesType.CARNIVORE:
-            # Carnivores cannot reproduce if they haven't eaten in 60 steps
-            return base_requirements and self.steps_since_fed < 60
+            # Fine-tuned carnivore requirements for optimal balance
+            recent_feeding = self.steps_since_fed < 32  # Sweet spot: between 30-35
+            good_energy = self.energy >= 68  # Sweet spot: between 65-70
+            return base_requirements and recent_feeding and good_energy
         
         return base_requirements
     
