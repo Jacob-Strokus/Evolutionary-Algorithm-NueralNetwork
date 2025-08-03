@@ -1,0 +1,97 @@
+
+## Neural Network Visualization Bug Fix Patch
+
+### File: src/visualization/web_server.py
+
+Replace the drawNeuralNetwork function (around line 1070) with this enhanced version:
+
+```javascript
+function drawNeuralNetwork(nn) {
+    const svg = d3.select('#neural-network-svg');
+    svg.selectAll('*').remove();
+    
+    const width = 800;
+    const height = 400;
+    svg.attr('width', width).attr('height', height);
+    
+    function showError(message) {
+        svg.append('text')
+            .attr('x', width / 2)
+            .attr('y', height / 2)
+            .attr('text-anchor', 'middle')
+            .attr('font-size', '16px')
+            .attr('fill', '#666')
+            .text(message);
+        console.warn('Neural visualization error:', message);
+    }
+    
+    // ENHANCED VALIDATION
+    if (!nn) {
+        showError("No neural network data provided");
+        return;
+    }
+    
+    if (!nn.weights_input_hidden || !Array.isArray(nn.weights_input_hidden) || nn.weights_input_hidden.length === 0) {
+        showError("Input weights not available");
+        return;
+    }
+    
+    if (!nn.weights_hidden_output || !Array.isArray(nn.weights_hidden_output) || nn.weights_hidden_output.length === 0) {
+        showError("Output weights not available");
+        return;
+    }
+    
+    if (!nn.current_inputs || !Array.isArray(nn.current_inputs)) {
+        showError("Input values not available");
+        return;
+    }
+    
+    if (!nn.current_outputs || !Array.isArray(nn.current_outputs)) {
+        showError("Output values not available");
+        return;
+    }
+    
+    // Fallback for missing hidden activations
+    if (!nn.hidden_activations || !Array.isArray(nn.hidden_activations)) {
+        nn.hidden_activations = new Array(nn.hidden_size || 16).fill(0);
+    }
+    
+    // ... rest of the existing drawing code with bounds checking ...
+}
+```
+
+### Also replace the updateAgentModalContent function with enhanced error handling:
+
+```javascript
+function updateAgentModalContent(agentData) {
+    // ... existing basic info updates ...
+    
+    if (agentData.neural_network && agentData.neural_network !== null) {
+        const nn = agentData.neural_network;
+        
+        // Validate network completeness
+        const isValid = nn.weights_input_hidden && nn.weights_hidden_output && 
+                       nn.current_inputs && nn.current_outputs;
+        
+        if (isValid) {
+            try {
+                updateFieldWithHighlight('network-size', `${nn.input_size}→${nn.hidden_size}→${nn.output_size}`);
+                updateNeuralInputs(nn);
+                updateNeuralOutputs(nn);
+                drawNeuralNetwork(nn);
+                document.querySelector('.neural-network-container').style.display = 'block';
+            } catch (error) {
+                console.error('Visualization error:', error);
+                document.querySelector('.neural-network-container').style.display = 'none';
+                addLog(`❌ Visualization failed for agent ${agentData.id}`);
+            }
+        } else {
+            document.querySelector('.neural-network-container').style.display = 'none';
+            addLog(`⚠️ Incomplete neural data for agent ${agentData.id}`);
+        }
+    } else {
+        document.querySelector('.neural-network-container').style.display = 'none';
+        addLog(`⚠️ No neural network for agent ${agentData.id}`);
+    }
+}
+```

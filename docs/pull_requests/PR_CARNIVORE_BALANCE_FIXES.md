@@ -40,10 +40,10 @@ feeding_requirement = 32        # Was 25
 ## 🧪 **Testing & Validation**
 
 ### **New Test Scripts Added**
-- `scripts/analyze_carnivore_reproduction_issue.py` - Problem analysis
-- `scripts/test_carnivore_fixes.py` - Comprehensive ecosystem testing
-- `scripts/test_adjusted_reproduction.py` - Parameter validation
-- `scripts/final_balance_test.py` - Final verification
+- `scripts/carnivore_analysis/analyze_carnivore_reproduction_issue.py` - Problem analysis
+- `scripts/carnivore_testing/test_carnivore_fixes.py` - Comprehensive ecosystem testing
+- `scripts/carnivore_testing/test_adjusted_reproduction.py` - Parameter validation
+- `scripts/carnivore_testing/final_balance_test.py` - Final verification
 
 ### **Test Results**
 ✅ **Reproduction Balance**: Carnivores reproduce when well-fed but face natural constraints  
@@ -54,7 +54,7 @@ feeding_requirement = 32        # Was 25
 ## 📚 **Documentation**
 
 ### **New Documentation Added**
-- `docs/CARNIVORE_BALANCE_FIXES.md` - Complete implementation details and analysis
+- `docs/bug_fixes/CARNIVORE_BALANCE_FIXES.md` - Complete implementation details and analysis
 - Comprehensive problem history and solution process
 - Final balanced parameters and configuration details
 - Testing methodology and validation results
