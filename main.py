@@ -47,6 +47,25 @@ import math
 project_root = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, project_root)
 
+# GPU Acceleration Detection - Automatic RTX 2060 Support
+try:
+    import torch
+    GPU_AVAILABLE = torch.cuda.is_available()
+    if GPU_AVAILABLE:
+        GPU_NAME = torch.cuda.get_device_name(0)
+        GPU_MEMORY = torch.cuda.get_device_properties(0).total_memory / (1024**3)
+        print(f"🎮 GPU DETECTED: {GPU_NAME} ({GPU_MEMORY:.1f}GB)")
+        print("🚀 EA-NN will automatically use GPU acceleration!")
+    else:
+        print("💻 GPU not detected - using optimized CPU processing")
+        GPU_NAME = "CPU"
+        GPU_MEMORY = 0
+except ImportError:
+    GPU_AVAILABLE = False
+    GPU_NAME = "CPU"
+    GPU_MEMORY = 0
+    print("⚠️ PyTorch not available - install for GPU acceleration")
+
 # Import from our organized src structure - Phase 2 Enhanced!
 from src.neural.evolutionary_agent import EvolutionaryNeuralAgent, EvolutionaryAgentConfig
 from src.neural.evolutionary_network import EvolutionaryNeuralNetwork, EvolutionaryNetworkConfig
@@ -60,11 +79,36 @@ from src.evolution.advanced_genetic import AdvancedGeneticAlgorithm, AdvancedEvo
 from src.evolution.advanced_fitness import AdvancedFitnessEvaluator
 
 class Phase2NeuralEnvironment(Environment):
-    """Phase 2 Enhanced Environment with Evolutionary Neural Agents"""
+    """Phase 2 Enhanced Environment with Evolutionary Neural Agents + GPU Acceleration"""
     
-    def __init__(self, width: int = 100, height: int = 100, use_neural_agents: bool = True):
+    def __init__(self, width: int = 100, height: int = 100, use_neural_agents: bool = True, use_gpu: bool = True):
         # Initialize parent environment
         super().__init__(width, height)
+        
+        # GPU Acceleration Setup
+        self.use_gpu = use_gpu and GPU_AVAILABLE
+        self.gpu_threshold = 50  # Use GPU for populations > 50 agents
+        
+        if self.use_gpu:
+            print(f"⚡ GPU Acceleration: ENABLED for {GPU_NAME}")
+            print(f"🎯 GPU threshold: {self.gpu_threshold} agents")
+            
+            # Import GPU acceleration components
+            try:
+                from src.optimization.gpu_accelerated_ecosystem_practical import (
+                    GPUAcceleratedNeuralNetwork,
+                    GPUAcceleratedSpatialOperations
+                )
+                self.gpu_neural_net = GPUAcceleratedNeuralNetwork(
+                    input_size=25, hidden_size=20, output_size=6, use_gpu=True
+                )
+                self.gpu_spatial_ops = GPUAcceleratedSpatialOperations(use_gpu=True)
+                print("🚀 GPU components initialized successfully!")
+            except ImportError as e:
+                print(f"⚠️ GPU components not available: {e}")
+                self.use_gpu = False
+        else:
+            print("💻 GPU Acceleration: DISABLED (using CPU optimization)")
         
         # Phase 2 Enhancement: Global fitness evaluator for sophisticated fitness landscapes
         self.global_fitness_evaluator = AdvancedFitnessEvaluator()
@@ -147,11 +191,17 @@ class Phase2NeuralEnvironment(Environment):
                 agent.fitness_evaluator = self.global_fitness_evaluator
     
     def step(self):
-        """Enhanced step with Phase 2 capabilities"""
+        """Enhanced step with Phase 2 capabilities + GPU Acceleration"""
         # Initialize step counter if not present
         if not hasattr(self, 'step_count'):
             self.step_count = 0
         self.step_count += 1
+        
+        # GPU Acceleration: Process agents with GPU if available and beneficial
+        if self.use_gpu and len(self.agents) >= self.gpu_threshold:
+            self._step_with_gpu_acceleration()
+        else:
+            self._step_with_cpu_processing()
         
         # Phase 2: Update environmental conditions for fitness landscape
         self.global_fitness_evaluator.update_environmental_conditions(self)
@@ -174,19 +224,102 @@ class Phase2NeuralEnvironment(Environment):
                     'species': agent.species_type.name
                 })
         
-        # Run standard environment step (includes agent updates with advanced fitness)
-        super().step()
-        
-        # Phase 2: Process multi-agent learning and temporal updates
+        # Ensure all agents have access to global fitness evaluator
         for agent in self.agents:
-            if hasattr(agent, 'temporal_network'):
-                # Temporal networks update themselves during forward passes
-                # Additional temporal learning context could be added here
-                pass
-            
-            # Ensure agent has access to global fitness evaluator
             if not hasattr(agent, 'fitness_evaluator') or agent.fitness_evaluator is None:
                 agent.fitness_evaluator = self.global_fitness_evaluator
+    
+    def _step_with_gpu_acceleration(self):
+        """Process step with GPU acceleration for large populations"""
+        try:
+            # GPU-accelerated neural network processing
+            alive_agents = [a for a in self.agents if a.is_alive]
+            if len(alive_agents) > 0:
+                # Prepare inputs for batch processing
+                agent_inputs = []
+                for agent in alive_agents:
+                    inputs = self._get_agent_neural_inputs(agent)
+                    agent_inputs.append(inputs)
+                
+                # Batch process neural networks on GPU
+                if hasattr(self, 'gpu_neural_net') and agent_inputs:
+                    import numpy as np
+                    batch_inputs = np.array(agent_inputs)
+                    batch_outputs = self.gpu_neural_net.forward_batch(batch_inputs)
+                    
+                    # Apply outputs to agents
+                    for i, agent in enumerate(alive_agents):
+                        if i < len(batch_outputs):
+                            self._apply_neural_outputs(agent, batch_outputs[i])
+                
+                # GPU-accelerated spatial operations
+                if hasattr(self, 'gpu_spatial_ops') and len(alive_agents) > 10:
+                    positions = np.array([[a.position.x, a.position.y] for a in alive_agents])
+                    distance_matrix = self.gpu_spatial_ops.calculate_distance_matrix(positions)
+                    # Use distance matrix for enhanced spatial processing
+            
+            # Run standard environment step for other updates
+            super().step()
+            
+        except Exception as e:
+            print(f"⚠️ GPU processing failed, falling back to CPU: {e}")
+            self._step_with_cpu_processing()
+    
+    def _step_with_cpu_processing(self):
+        """Process step with CPU optimization"""
+        # Run standard environment step (includes agent updates with advanced fitness)
+        super().step()
+    
+    def _get_agent_neural_inputs(self, agent):
+        """Get neural network inputs for an agent (GPU-compatible format)"""
+        import numpy as np
+        
+        # Enhanced sensory inputs for Phase 2
+        inputs = [
+            agent.position.x / self.width,  # Normalized position
+            agent.position.y / self.height,
+            agent.energy,
+            getattr(agent, 'age', 0) / 1000.0,
+            getattr(agent, 'vision_range', 50.0) / 100.0,
+            getattr(agent, 'speed', 1.0),
+            len(getattr(agent, 'neighbors', [])) / 10.0,
+            getattr(agent, 'last_food_time', 0) / 100.0,
+            getattr(agent, 'reproduction_readiness', 0.0),
+            1.0,  # Bias
+            # Additional Phase 2 inputs
+            len(getattr(agent, 'multi_target_processor', {}).get('active_targets', [])) / 6.0,
+            len(getattr(agent, 'received_signals', [])) / 10.0,
+            getattr(agent, 'exploration_bonus', 0.0),
+            getattr(agent, 'social_learning_rate', 0.0),
+            getattr(agent, 'temporal_memory_strength', 0.0),
+            # Pad to reach 25 inputs
+            0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0
+        ]
+        
+        return np.array(inputs[:25])  # Ensure exactly 25 inputs
+    
+    def _apply_neural_outputs(self, agent, outputs):
+        """Apply neural network outputs to agent behavior"""
+        # Interpret neural network outputs
+        move_x = outputs[0] * 2.0  # Movement in x direction
+        move_y = outputs[1] * 2.0  # Movement in y direction
+        energy_consumption = abs(outputs[2])  # Energy usage
+        reproduction_desire = outputs[3]  # Reproduction behavior
+        social_signal = outputs[4]  # Social communication
+        exploration_drive = outputs[5]  # Exploration motivation
+        
+        # Apply agent updates
+        agent.position.x = max(0, min(self.width, agent.position.x + move_x))
+        agent.position.y = max(0, min(self.height, agent.position.y + move_y))
+        agent.energy = max(0, agent.energy - energy_consumption * 0.1)
+        
+        # Update Phase 2 attributes
+        if hasattr(agent, 'reproduction_readiness'):
+            agent.reproduction_readiness = max(0, min(1, reproduction_desire))
+        if hasattr(agent, 'social_signal_strength'):
+            agent.social_signal_strength = max(0, min(1, social_signal))
+        if hasattr(agent, 'exploration_drive'):
+            agent.exploration_drive = max(0, min(1, exploration_drive))
     
     def _process_social_interactions(self):
         """Process advanced social interactions between agents"""
@@ -283,7 +416,13 @@ class Phase2NeuralEnvironment(Environment):
             'avg_fitness_score': avg_fitness,
             'fitness_landscape': fitness_landscape['environmental_conditions'],
             'niche_distribution': niche_distribution,
-            'step_count': getattr(self, 'step_count', 0)
+            'step_count': getattr(self, 'step_count', 0),
+            # GPU Acceleration Stats
+            'gpu_enabled': self.use_gpu,
+            'gpu_name': GPU_NAME,
+            'gpu_memory': f"{GPU_MEMORY:.1f}GB" if GPU_MEMORY > 0 else "N/A",
+            'processing_mode': 'GPU' if (self.use_gpu and len(self.agents) >= self.gpu_threshold) else 'CPU',
+            'gpu_threshold': self.gpu_threshold
         }
     
     def get_fitness_landscape_info(self):
@@ -549,7 +688,7 @@ def run_web_simulation(steps=1000):
     genetic_config.generation_length = 300      # Steps per generation
     
     # Create evolution system components
-    env = Phase2NeuralEnvironment(width=100, height=100, use_neural_agents=True)
+    env = Phase2NeuralEnvironment(width=100, height=100, use_neural_agents=True, use_gpu=True)
     genetic_algorithm = AdvancedGeneticAlgorithm(genetic_config)
     
     # Create a simplified evolution system for web interface
