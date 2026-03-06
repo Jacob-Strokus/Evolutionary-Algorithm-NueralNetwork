@@ -1,0 +1,91 @@
+# Docker ignore file for EA-NN
+# Excludes unnecessary files from Docker build context
+
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Development containers
+.devcontainer
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments (old approach)
+scripts/ea-nn-gpu-env/
+venv/
+env/
+ENV/
+
+# GPU setup scripts (replaced by containers)
+scripts/gpu/setup_gpu.sh
+scripts/gpu/setup_gpu.bat
+run_gpu.sh
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Test coverage
+htmlcov/
+.coverage
+.pytest_cache/
+
+# Documentation build
+docs/_build/
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints
+
+# Node.js (if any frontend dependencies)
+node_modules/
+npm-debug.log*
+
+# Docker
+Dockerfile.*
+docker-compose.override.yml
+
+# Kubernetes
+k8s/secrets/
+
+# Temporary files
+*.tmp
+*.temp
+nul

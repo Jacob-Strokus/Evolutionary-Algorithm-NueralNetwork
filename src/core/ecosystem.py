@@ -1,447 +1,242 @@
 """
-AI Ecosystem Simulation - Phase 1
-Basic environment with herbivores and carnivores
+Ecosystem - core simulation primitives.
+
+Defines the world (Environment), food sources, positions, and species types.
+The Environment runs one clean step loop: move → feed → hunt → reproduce → cleanup.
 """
-import random
+
 import math
+import random
 from dataclasses import dataclass
-from typing import List, Tuple, Optional
 from enum import Enum
+from typing import List, Optional
+
 
 class SpeciesType(Enum):
     HERBIVORE = "herbivore"
-    CARNIVORE = "carnivore"
+    CARNIVORE  = "carnivore"
+
 
 @dataclass
 class Position:
     x: float
     y: float
-    
-    def distance_to(self, other: 'Position') -> float:
-        return math.sqrt((self.x - other.x)**2 + (self.y - other.y)**2)
 
-@dataclass
+    def distance_to(self, other: "Position") -> float:
+        return math.sqrt((self.x - other.x) ** 2 + (self.y - other.y) ** 2)
+
+
 class Food:
-    position: Position
-    energy_value: int = 40  # Increased from 20 - more rewarding food!
-    regeneration_time: int = 100  # Steps until food respawns
-    current_regen: int = 0
-    is_available: bool = True
+    """A food source that respawns after a fixed number of steps."""
 
-class Agent:
-    def __init__(self, species_type: SpeciesType, position: Position, agent_id: int):
-        self.id = agent_id
-        self.species_type = species_type
-        self.position = position
-        self.energy = 150  # Increased starting energy for better survival
-        self.age = 0
-        self.is_alive = True
-        self.reproduction_cooldown = 0
-        
-        # Species-specific attributes (BALANCED FOR LEARNING)
-        if species_type == SpeciesType.HERBIVORE:
-            self.max_energy = 200  # Increased from 120
-            self.reproduction_threshold = 120  # Increased from 80
-            self.reproduction_cost = 50  # Increased from 40
-            self.energy_decay = 0.5  # Reduced from 1 - KEY CHANGE!
-            self.speed = 2.0
-            self.vision_range = 15.0
-            self.size = 1.0
-        else:  # CARNIVORE
-            self.max_energy = 250  # Increased from 150
-            self.reproduction_threshold = 150  # Increased from 100
-            self.reproduction_cost = 70  # Increased from 60
-            self.energy_decay = 0.8  # Reduced from 2 - KEY CHANGE!
-            self.speed = 3.0
-            self.vision_range = 20.0
-            self.size = 1.5
-    
-    def move_towards(self, target: Position, speed_multiplier: float = 1.0):
-        """Move towards a target position"""
-        if self.position.distance_to(target) < 0.1:
-            return
-            
-        dx = target.x - self.position.x
-        dy = target.y - self.position.y
-        distance = math.sqrt(dx**2 + dy**2)
-        
-        if distance > 0:
-            move_speed = self.speed * speed_multiplier
-            self.position.x += (dx / distance) * move_speed
-            self.position.y += (dy / distance) * move_speed
-    
-    def move_away_from(self, threat: Position, speed_multiplier: float = 1.5):
-        """Move away from a threatening position"""
-        dx = self.position.x - threat.x
-        dy = self.position.y - threat.y
-        distance = math.sqrt(dx**2 + dy**2)
-        
-        if distance > 0:
-            move_speed = self.speed * speed_multiplier
-            self.position.x += (dx / distance) * move_speed
-            self.position.y += (dy / distance) * move_speed
-    
-    def random_move(self):
-        """Move in a random direction"""
-        angle = random.uniform(0, 2 * math.pi)
-        move_speed = self.speed * 0.5
-        self.position.x += math.cos(angle) * move_speed
-        self.position.y += math.sin(angle) * move_speed
-    
-    def can_reproduce(self) -> bool:
-        return (self.energy >= self.reproduction_threshold and 
-                self.reproduction_cooldown <= 0 and 
-                self.age > 50)
-    
-    def reproduce(self) -> 'Agent':
-        """Create a new agent of the same species"""
-        if not self.can_reproduce():
-            return None
-            
-        self.energy -= self.reproduction_cost
-        self.reproduction_cooldown = 200
-        
-        # Offspring spawns nearby
-        offspring_pos = Position(
-            self.position.x + random.uniform(-5, 5),
-            self.position.y + random.uniform(-5, 5)
-        )
-        
-        return Agent(self.species_type, offspring_pos, random.randint(10000, 99999))
-    
-    def update(self):
-        """Update agent state each time step"""
-        self.age += 1
-        self.energy -= self.energy_decay
-        
-        if self.reproduction_cooldown > 0:
-            self.reproduction_cooldown -= 1
-        
-        # Death conditions
-        if self.energy <= 0 or self.age > 2000:
-            self.is_alive = False
+    def __init__(self, position: Position, energy_value: float = 30.0, regen_time: int = 80):
+        self.position     = position
+        self.energy_value = energy_value
+        self.regen_time   = regen_time
+        self.is_available = True
+        self._regen_counter = 0
+
+    def consume(self) -> float:
+        """Consume this food source and return the energy gained."""
+        self.is_available   = False
+        self._regen_counter = 0
+        return self.energy_value
+
+    def tick(self):
+        """Advance the regeneration timer by one simulation step."""
+        if not self.is_available:
+            self._regen_counter += 1
+            if self._regen_counter >= self.regen_time:
+                self.is_available   = True
+                self._regen_counter = 0
+
 
 class Environment:
-    def __init__(self, width: int = 200, height: int = 200):
-        self.width = width
-        self.height = height
-        self.agents: List[Agent] = []
+    """
+    The simulation world.
+
+    Runs a four-phase step:
+      1. Neural decisions + movement   (each agent calls think_and_move)
+      2. Feeding interactions           (herbivores graze, carnivores hunt)
+      3. Reproduction                   (agents that want to and can, do)
+      4. Cleanup                        (remove dead, add offspring, regen food)
+    """
+
+    FOOD_COUNT  = 80
+    FOOD_ENERGY = 30.0
+    FOOD_REGEN  = 60   # steps until a consumed food source respawns
+
+    def __init__(self, width: int = 100, height: int = 100):
+        self.width      = width
+        self.height     = height
+        self.time_step  = 0
+        self._next_id   = 1
+        self.agents: List   = []
         self.food_sources: List[Food] = []
-        self.time_step = 0
-        self.next_agent_id = 1
-        
-        self._initialize_food()
-        self._initialize_agents()
-    
-    def _initialize_food(self):
-        """Create initial food sources distributed across the environment"""
-        num_food_sources = 50
-        for _ in range(num_food_sources):
+        self._spawn_food(self.FOOD_COUNT)
+
+    # ------------------------------------------------------------------ #
+    # Agent / food management                                              #
+    # ------------------------------------------------------------------ #
+
+    def next_agent_id(self) -> int:
+        aid = self._next_id
+        self._next_id += 1
+        return aid
+
+    def add_agents(self, agents):
+        self.agents.extend(agents)
+
+    def clamp(self, agent):
+        """Keep an agent strictly inside the world boundaries."""
+        agent.position.x = max(0.0, min(float(self.width),  agent.position.x))
+        agent.position.y = max(0.0, min(float(self.height), agent.position.y))
+
+    def _spawn_food(self, n: int):
+        for _ in range(n):
             pos = Position(
-                random.uniform(10, self.width - 10),
-                random.uniform(10, self.height - 10)
+                random.uniform(5.0, self.width  - 5.0),
+                random.uniform(5.0, self.height - 5.0),
             )
-            self.food_sources.append(Food(pos))
-    
-    def _initialize_agents(self):
-        """Create initial population of herbivores and carnivores"""
-        # Start with more herbivores than carnivores
-        for _ in range(20):
-            pos = Position(
-                random.uniform(10, self.width - 10),
-                random.uniform(10, self.height - 10)
-            )
-            herbivore = Agent(SpeciesType.HERBIVORE, pos, self.next_agent_id)
-            self.agents.append(herbivore)
-            self.next_agent_id += 1
-        
-        for _ in range(8):
-            pos = Position(
-                random.uniform(10, self.width - 10),
-                random.uniform(10, self.height - 10)
-            )
-            carnivore = Agent(SpeciesType.CARNIVORE, pos, self.next_agent_id)
-            self.agents.append(carnivore)
-            self.next_agent_id += 1
-    
-    def add_agent(self, agent: Agent):
-        """Add an agent to the environment"""
-        self.agents.append(agent)
-    
-    def add_food(self, count: int = 1):
-        """Add food sources to the environment with enhanced distribution"""
-        # ENHANCED: Create clustered food distribution away from boundaries
-        if count <= 8:  # For small amounts, use clustered approach
-            self._add_clustered_food(count)
-        else:  # For larger amounts, use mixed approach
-            clusters = count // 4
-            self._add_clustered_food(clusters * 4)
-            # Add remaining scattered
-            remaining = count - (clusters * 4)
-            for _ in range(remaining):
-                pos = Position(
-                    random.uniform(self.width * 0.25, self.width * 0.75),
-                    random.uniform(self.height * 0.25, self.height * 0.75)
-                )
-                food = Food(pos)
-                food.regeneration_time = 120  # Slightly slower regeneration
-                self.food_sources.append(food)
-    
-    def _add_clustered_food(self, count: int):
-        """Add food in clusters away from boundaries"""
-        num_clusters = max(1, count // 4)
-        items_per_cluster = count // num_clusters
-        
-        for cluster in range(num_clusters):
-            # Place cluster center in safe zone (away from boundaries)
-            center_x = random.uniform(self.width * 0.3, self.width * 0.7)
-            center_y = random.uniform(self.height * 0.3, self.height * 0.7)
-            
-            # Create cluster of food around center
-            for _ in range(items_per_cluster):
-                # Cluster radius
-                cluster_radius = 12
-                offset_x = random.uniform(-cluster_radius, cluster_radius)
-                offset_y = random.uniform(-cluster_radius, cluster_radius)
-                
-                # Ensure food stays in safe zone
-                food_x = max(self.width * 0.2, min(self.width * 0.8, center_x + offset_x))
-                food_y = max(self.height * 0.2, min(self.height * 0.8, center_y + offset_y))
-                
-                food = Food(Position(food_x, food_y))
-                food.regeneration_time = 120  # Slower regeneration for balance
-                self.food_sources.append(food)
-    
-    def get_neural_stats(self) -> dict:
-        """Get neural network statistics for agents"""
-        from src.neural.neural_agents import NeuralAgent
-        
-        neural_agents = [agent for agent in self.agents if isinstance(agent, NeuralAgent)]
-        
-        if not neural_agents:
-            return {
-                'herbivore_count': len([a for a in self.agents if a.species_type == SpeciesType.HERBIVORE]),
-                'carnivore_count': len([a for a in self.agents if a.species_type == SpeciesType.CARNIVORE]),
-                'avg_neural_fitness': 0,
-                'avg_decisions_made': 0
-            }
-        
-        herbivores = [a for a in neural_agents if a.species_type == SpeciesType.HERBIVORE]
-        carnivores = [a for a in neural_agents if a.species_type == SpeciesType.CARNIVORE]
-        
-        total_fitness = sum(agent.brain.fitness_score for agent in neural_agents)
-        avg_fitness = total_fitness / len(neural_agents) if neural_agents else 0
-        
-        total_decisions = sum(getattr(agent.brain, 'decisions_made', 0) for agent in neural_agents)
-        avg_decisions = total_decisions / len(neural_agents) if neural_agents else 0
-        
-        return {
-            'herbivore_count': len(herbivores),
-            'carnivore_count': len(carnivores),
-            'avg_neural_fitness': avg_fitness,
-            'avg_decisions_made': avg_decisions,
-            'total_agents': len(neural_agents)
-        }
-    
-    def keep_agent_in_bounds(self, agent: Agent):
-        """Ensure agent stays within environment boundaries"""
-        agent.position.x = max(0, min(self.width, agent.position.x))
-        agent.position.y = max(0, min(self.height, agent.position.y))
-    
-    def find_nearest_food(self, agent: Agent) -> Optional[Food]:
-        """Find the nearest available food source within vision range"""
-        nearest_food = None
-        nearest_distance = float('inf')
-        
+            self.food_sources.append(Food(pos, self.FOOD_ENERGY, self.FOOD_REGEN))
+
+    # ------------------------------------------------------------------ #
+    # Nearest-entity helpers used by the sensor system                     #
+    # ------------------------------------------------------------------ #
+
+    def nearest_food(self, position: Position, vision_range: float, n: int = 3):
+        """
+        Return up to *n* available food sources within *vision_range*,
+        as a list of (distance, Food) tuples sorted nearest-first.
+        """
+        visible = []
         for food in self.food_sources:
             if food.is_available:
-                distance = agent.position.distance_to(food.position)
-                if distance <= agent.vision_range and distance < nearest_distance:
-                    nearest_food = food
-                    nearest_distance = distance
-        
-        return nearest_food
-    
-    def find_nearest_prey(self, predator: Agent) -> Optional[Agent]:
-        """Find the nearest herbivore within vision range"""
-        if predator.species_type != SpeciesType.CARNIVORE:
-            return None
-            
-        nearest_prey = None
-        nearest_distance = float('inf')
-        
-        for agent in self.agents:
-            if (agent.species_type == SpeciesType.HERBIVORE and 
-                agent.is_alive and agent != predator):
-                distance = predator.position.distance_to(agent.position)
-                if distance <= predator.vision_range and distance < nearest_distance:
-                    nearest_prey = agent
-                    nearest_distance = distance
-        
-        return nearest_prey
-    
-    def find_nearest_threat(self, prey: Agent) -> Optional[Agent]:
-        """Find the nearest carnivore within vision range"""
-        if prey.species_type != SpeciesType.HERBIVORE:
-            return None
-            
-        nearest_threat = None
-        nearest_distance = float('inf')
-        
-        for agent in self.agents:
-            if (agent.species_type == SpeciesType.CARNIVORE and 
-                agent.is_alive and agent != prey):
-                distance = prey.position.distance_to(agent.position)
-                if distance <= prey.vision_range and distance < nearest_distance:
-                    nearest_threat = agent
-                    nearest_distance = distance
-        
-        return nearest_threat
-    
-    def attempt_hunt(self, predator: Agent, prey: Agent) -> bool:
-        """Attempt to hunt prey if close enough"""
-        distance = predator.position.distance_to(prey.position)
-        if distance <= 5.0:  # Increased hunt range
-            # Improved success calculation based on multiple factors
-            energy_factor = min(0.8, predator.energy / 80)  # Lower energy threshold
-            size_factor = 0.9 if prey.energy < predator.energy else 0.6  # Easier to hunt smaller prey
-            health_factor = 0.1 if prey.energy < 20 else 0.0  # Bonus for hunting weak prey
-            
-            hunt_success_chance = min(0.9, energy_factor + size_factor + health_factor)
-            
-            if random.random() < hunt_success_chance:
-                # Successful hunt with better energy transfer
-                energy_gained = int(prey.energy * 0.8)  # 80% energy transfer efficiency
-                predator.energy = min(predator.max_energy, predator.energy + energy_gained)
-                prey.is_alive = False
-                return True
-        return False
-    
-    def step(self):
-        """Execute one simulation step"""
-        self.time_step += 1
-        new_agents = []
-        
-        # Update all agents
-        for agent in self.agents:
-            if not agent.is_alive:
-                continue
-                
-            # Basic AI behavior
-            if agent.species_type == SpeciesType.HERBIVORE:
-                # Herbivore behavior: Find food, avoid predators, reproduce
-                threat = self.find_nearest_threat(agent)
-                if threat and agent.position.distance_to(threat.position) < 15:
-                    # Run away from predators
-                    agent.move_away_from(threat.position, speed_multiplier=1.5)
-                else:
-                    # Look for food
-                    food = self.find_nearest_food(agent)
-                    if food:
-                        if agent.position.distance_to(food.position) < 2.0:
-                            # Eat food
-                            agent.energy = min(agent.max_energy, agent.energy + food.energy_value)
-                            food.is_available = False
-                            food.current_regen = 0
-                        else:
-                            # Move towards food
-                            agent.move_towards(food.position)
-                    else:
-                        # Wander randomly
-                        agent.random_move()
-                
-                # Try to reproduce
-                if agent.can_reproduce():
-                    offspring = agent.reproduce()
-                    if offspring:
-                        new_agents.append(offspring)
-            
-            else:  # CARNIVORE
-                # Carnivore behavior: Hunt herbivores, reproduce
-                prey = self.find_nearest_prey(agent)
-                if prey:
-                    # Try to hunt
-                    if self.attempt_hunt(agent, prey):
-                        pass  # Successful hunt handled in attempt_hunt
-                    else:
-                        # Move towards prey
-                        agent.move_towards(prey.position, speed_multiplier=1.2)
-                else:
-                    # Wander randomly if no prey in sight
-                    agent.random_move()
-                
-                # Try to reproduce
-                if agent.can_reproduce():
-                    offspring = agent.reproduce()
-                    if offspring:
-                        new_agents.append(offspring)
-            
-            # Update agent state
-            agent.update()
-            
-            # Keep agent in bounds
-            self.keep_agent_in_bounds(agent)
-        
-        # Add new offspring
-        for new_agent in new_agents:
-            self.keep_agent_in_bounds(new_agent)
-            self.agents.append(new_agent)
-            self.next_agent_id += 1
-        
-        # Remove dead agents
-        self.agents = [agent for agent in self.agents if agent.is_alive]
-        
-        # Regenerate food
-        for food in self.food_sources:
-            if not food.is_available:
-                food.current_regen += 1
-                if food.current_regen >= food.regeneration_time:
-                    food.is_available = True
-    
-    def get_population_stats(self) -> dict:
-        """Get current population statistics"""
-        herbivore_count = sum(1 for agent in self.agents 
-                            if agent.species_type == SpeciesType.HERBIVORE and agent.is_alive)
-        carnivore_count = sum(1 for agent in self.agents 
-                            if agent.species_type == SpeciesType.CARNIVORE and agent.is_alive)
-        
-        avg_herbivore_energy = 0
-        avg_carnivore_energy = 0
-        
-        if herbivore_count > 0:
-            avg_herbivore_energy = sum(agent.energy for agent in self.agents 
-                                     if agent.species_type == SpeciesType.HERBIVORE and agent.is_alive) / herbivore_count
-        
-        if carnivore_count > 0:
-            avg_carnivore_energy = sum(agent.energy for agent in self.agents 
-                                     if agent.species_type == SpeciesType.CARNIVORE and agent.is_alive) / carnivore_count
-        
-        available_food = sum(1 for food in self.food_sources if food.is_available)
-        
-        return {
-            'time_step': self.time_step,
-            'herbivore_count': herbivore_count,
-            'carnivore_count': carnivore_count,
-            'total_population': herbivore_count + carnivore_count,
-            'avg_herbivore_energy': round(avg_herbivore_energy, 1),
-            'avg_carnivore_energy': round(avg_carnivore_energy, 1),
-            'available_food': available_food
-        }
+                d = position.distance_to(food.position)
+                if d <= vision_range:
+                    visible.append((d, food))
+        visible.sort(key=lambda t: t[0])
+        return visible[:n]
 
-if __name__ == "__main__":
-    # Quick test when running ecosystem.py directly
-    print("🧪 Testing Ecosystem Core Functionality")
-    print("=" * 60)
-    env = Environment()
-    print(f"✅ Environment created: {len(env.agents)} agents, {len(env.food_sources)} food sources")
-    
-    # Run a quick simulation test
-    print("🏃 Running 100 simulation steps...")
-    for i in range(100):
-        env.step()
-        if i % 20 == 0:
-            stats = env.get_population_stats()
-            print(f"Step {i}: H={stats['herbivore_count']}, C={stats['carnivore_count']}")
-    
-    final_stats = env.get_population_stats()
-    print(f"✅ Test complete! Final: H={final_stats['herbivore_count']}, C={final_stats['carnivore_count']}")
+    def nearest_agents(
+        self,
+        position: Position,
+        vision_range: float,
+        species: SpeciesType,
+        exclude=None,
+        n: int = 3,
+    ):
+        """
+        Return up to *n* alive agents of the given species within
+        *vision_range*, as (distance, agent) tuples sorted nearest-first.
+        """
+        visible = []
+        for agent in self.agents:
+            if agent is exclude or not agent.is_alive:
+                continue
+            if agent.species_type == species:
+                d = position.distance_to(agent.position)
+                if d <= vision_range:
+                    visible.append((d, agent))
+        visible.sort(key=lambda t: t[0])
+        return visible[:n]
+
+    # ------------------------------------------------------------------ #
+    # Main step                                                            #
+    # ------------------------------------------------------------------ #
+
+    def step(self):
+        alive = [a for a in self.agents if a.is_alive]
+
+        # Phase 1 – Neural decisions + movement
+        for agent in alive:
+            agent.think_and_move(self)
+
+        # Phase 2 – Feeding
+        # Reset hunt-lock flags so each prey can only be killed once per step.
+        for agent in alive:
+            agent._targeted = False
+
+        herbivores = [a for a in alive if a.species_type == SpeciesType.HERBIVORE]
+        carnivores = [a for a in alive if a.species_type == SpeciesType.CARNIVORE]
+
+        for herb in herbivores:
+            self._graze(herb)
+
+        for carn in carnivores:
+            self._hunt(carn, herbivores)
+
+        # Phase 3 – Reproduction
+        offspring = []
+        for agent in alive:
+            if agent._wants_to_reproduce and agent.can_reproduce():
+                child = agent.reproduce(self)
+                if child is not None:
+                    offspring.append(child)
+
+        # Phase 4 – Cleanup
+        self.agents = [a for a in self.agents if a.is_alive]
+        self.agents.extend(offspring)
+
+        for food in self.food_sources:
+            food.tick()
+
+        self.time_step += 1
+
+    # ------------------------------------------------------------------ #
+    # Feeding helpers                                                      #
+    # ------------------------------------------------------------------ #
+
+    def _graze(self, herbivore):
+        """Let a herbivore eat the nearest available food within eat_range."""
+        for food in self.food_sources:
+            if food.is_available:
+                if herbivore.position.distance_to(food.position) <= herbivore.eat_range:
+                    herbivore.eat(food.consume())
+                    break  # one source per step
+
+    def _hunt(self, carnivore, herbivores: list):
+        """Let a carnivore attempt to kill the nearest untargeted prey."""
+        best      = None
+        best_dist = float("inf")
+
+        for prey in herbivores:
+            if not prey.is_alive or prey._targeted:
+                continue
+            d = carnivore.position.distance_to(prey.position)
+            if d <= carnivore.hunt_range and d < best_dist:
+                best      = prey
+                best_dist = d
+
+        if best is None:
+            return
+
+        # Hunt success chance: increases with carnivore energy and decreases with distance.
+        energy_factor = min(0.55, (carnivore.energy / carnivore.max_energy) * 0.7)
+        dist_factor   = max(0.0,  1.0 - best_dist / carnivore.hunt_range) * 0.3
+        chance        = min(0.80, 0.30 + energy_factor + dist_factor)
+
+        if random.random() < chance:
+            best._targeted = True
+            best.is_alive  = False
+            carnivore.eat(best.energy * 0.7)
+            carnivore.prey_captures += 1
+
+    # ------------------------------------------------------------------ #
+    # Statistics                                                           #
+    # ------------------------------------------------------------------ #
+
+    def get_stats(self) -> dict:
+        herbs = [a for a in self.agents if a.species_type == SpeciesType.HERBIVORE]
+        carns = [a for a in self.agents if a.species_type == SpeciesType.CARNIVORE]
+        avail = sum(1 for f in self.food_sources if f.is_available)
+
+        return {
+            "time_step"           : self.time_step,
+            "herbivores"          : len(herbs),
+            "carnivores"          : len(carns),
+            "total_agents"        : len(self.agents),
+            "available_food"      : avail,
+            "avg_herbivore_energy": sum(a.energy for a in herbs) / len(herbs) if herbs else 0.0,
+            "avg_carnivore_energy": sum(a.energy for a in carns) / len(carns) if carns else 0.0,
+        }

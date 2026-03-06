@@ -30,42 +30,93 @@ else
 fi
 echo ""
 
-echo "🔄 Installing PyTorch with CUDA support..."
+echo "🔄 Setting up Python environment for PyTorch with CUDA support..."
 echo "This may take a few minutes..."
 echo ""
 
 # Check if we're in WSL and should use Windows Python
 if [[ $(uname -r) == *microsoft* ]]; then
-    echo "🔍 WSL detected - using Windows Python for GPU support"
-    PYTHON_CMD="/mnt/c/Program Files/Python313/python.exe"
+    echo "🔍 WSL detected - checking for Windows Python with GPU support"
+    WINDOWS_PYTHON="/mnt/c/Program Files/Python313/python.exe"
     
-    if [ ! -f "$PYTHON_CMD" ]; then
-        echo "❌ Windows Python not found at expected location"
-        echo "Falling back to WSL python3"
-        PYTHON_CMD="python3"
+    if [ -f "$WINDOWS_PYTHON" ]; then
+        echo "✅ Found Windows Python - using for GPU support"
+        PYTHON_CMD="$WINDOWS_PYTHON"
+        VENV_PATH="../ea-nn-gpu-env"
+        
+        # Create virtual environment using Windows Python
+        echo "🏗️ Creating virtual environment for GPU acceleration..."
+        "$PYTHON_CMD" -m venv "$VENV_PATH"
+        
+        # Use virtual environment
+        PYTHON_CMD="$VENV_PATH/Scripts/python.exe"
+        PIP_CMD="$VENV_PATH/Scripts/pip.exe"
+        
+        echo "✅ Virtual environment created: $VENV_PATH"
     else
-        echo "✅ Using Windows Python: $PYTHON_CMD"
+        echo "⚠️ Windows Python not found - using WSL with virtual environment"
+        PYTHON_CMD="python3"
+        VENV_PATH="../ea-nn-gpu-env"
+        
+        # Create virtual environment
+        echo "🏗️ Creating virtual environment..."
+        $PYTHON_CMD -m venv "$VENV_PATH"
+        
+        # Use virtual environment
+        PYTHON_CMD="$VENV_PATH/bin/python"
+        PIP_CMD="$VENV_PATH/bin/pip"
+        
+        echo "✅ Virtual environment created: $VENV_PATH"
     fi
 else
+    echo "🐧 Linux detected - using virtual environment"
     PYTHON_CMD="python3"
+    VENV_PATH="../ea-nn-gpu-env"
+    
+    # Create virtual environment
+    echo "🏗️ Creating virtual environment..."
+    $PYTHON_CMD -m venv "$VENV_PATH"
+    
+    # Use virtual environment
+    PYTHON_CMD="$VENV_PATH/bin/python"
+    PIP_CMD="$VENV_PATH/bin/pip"
+    
+    echo "✅ Virtual environment created: $VENV_PATH"
 fi
 
+# Upgrade pip first
+echo "⬆️ Upgrading pip..."
+$PIP_CMD install --upgrade pip
+
 # Uninstall existing PyTorch (CPU version)
-echo "Removing existing PyTorch..."
-$PYTHON_CMD -m pip uninstall torch torchvision -y
+echo "🧹 Removing existing PyTorch..."
+$PIP_CMD uninstall torch torchvision -y
 
 # Install PyTorch with CUDA
-echo "Installing PyTorch with CUDA 12.4 support..."
-$PYTHON_CMD -m pip install torch torchvision --index-url https://download.pytorch.org/whl/cu124
+echo "🚀 Installing PyTorch with CUDA 12.4 support..."
+$PIP_CMD install torch torchvision --index-url https://download.pytorch.org/whl/cu124
 
 if [ $? -ne 0 ]; then
     echo "❌ PyTorch installation failed"
     echo ""
     echo "🔧 Troubleshooting:"
     echo "1. Check internet connection"
-    echo "2. Update pip: $PYTHON_CMD -m pip install --upgrade pip"
+    echo "2. Verify virtual environment is active"
     echo "3. Try manual installation from pytorch.org"
+    echo "4. Check available disk space"
     exit 1
+fi
+
+# Install EA-NN dependencies
+echo "📦 Installing EA-NN dependencies..."
+if [ -f "../../requirements.txt" ]; then
+    $PIP_CMD install -r "../../requirements.txt"
+    echo "✅ Requirements installed from requirements.txt"
+else
+    # Install essential dependencies manually
+    echo "Installing essential dependencies..."
+    $PIP_CMD install matplotlib numpy flask flask-socketio websockets
+    echo "✅ Essential dependencies installed"
 fi
 
 echo ""
@@ -77,6 +128,7 @@ print(f'CUDA Available: {torch.cuda.is_available()}')
 if torch.cuda.is_available():
     print(f'GPU Name: {torch.cuda.get_device_name(0)}')
     print(f'GPU Count: {torch.cuda.device_count()}')
+    print(f'CUDA Version: {torch.version.cuda}')
 else:
     print('Note: GPU may still work with proper drivers')
 "
@@ -92,10 +144,33 @@ echo "🎉 SUCCESS! GPU acceleration is ready!"
 echo ""
 echo "🚀 Your RTX 2060 is now configured for EA-NN"
 echo ""
+echo "📁 Virtual environment created at: $VENV_PATH"
+echo ""
+echo "🔧 To activate the environment manually:"
+if [[ $(uname -r) == *microsoft* ]] && [ -f "$WINDOWS_PYTHON" ]; then
+    echo "   Windows: $VENV_PATH\\Scripts\\activate.bat"
+    echo "   WSL: source $VENV_PATH/Scripts/activate"
+else
+    echo "   source $VENV_PATH/bin/activate"
+fi
+echo ""
+echo "🚀 Quick Start Commands:"
+echo "   cd /mnt/c/Users/Admin/Desktop/game/EA-NN"
+echo "   chmod +x run_gpu.sh"
+echo "   ./run_gpu.sh --web"
+echo ""
+echo "📋 Manual Commands:"
+echo "   cd ../../  # Go to project root"
+if [[ $(uname -r) == *microsoft* ]] && [ -f "$WINDOWS_PYTHON" ]; then
+    echo "   ./scripts/ea-nn-gpu-env/Scripts/python.exe main.py --web"
+else
+    echo "   ./scripts/ea-nn-gpu-env/bin/python main.py --web"
+fi
+echo ""
 echo "Next steps:"
-echo "1. Run: python main.py --web"
-echo "2. Watch GPU acceleration in action!"
-echo "3. Monitor GPU usage with: nvidia-smi"
+echo "1. 🌐 Open browser to: http://localhost:5000"
+echo "2. 👀 Watch GPU acceleration in action!"
+echo "3. 📊 Monitor GPU usage with: nvidia-smi"
 echo ""
 echo "Expected performance boost: 3-5x faster simulations! 🎯"
 echo ""
